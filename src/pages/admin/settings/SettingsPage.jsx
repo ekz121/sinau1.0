@@ -90,35 +90,61 @@ function TabQris() {
       .then(({ data }) => { if (data?.value) { setQrisUrl(data.value); setPreview(data.value) } })
   }, [])
 
+  const persistQrisUrl = async (value) => {
+    const { data, error } = await supabase.functions.invoke('admin-update-settings', {
+      body: { settings: { qris_image_url: value } },
+    })
+    if (error || data?.error) throw new Error(data?.error || error?.message || 'Gagal menyimpan QRIS')
+    invalidateSettingsCache(['qris_image_url'])
+  }
+
   const handleFile = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) { toast.error('File harus JPG, PNG, atau WebP'); return }
     if (file.size > 2 * 1024 * 1024) { toast.error('Ukuran file maksimal 2MB'); return }
     setUploading(true)
+    let uploadedPath = null
+    let uploadedUrl = null
     try {
       const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[file.type]
-      const path = `qris/qris_${Date.now()}.${ext}`
+      const path = `qris/${crypto.randomUUID()}.${ext}`
       const { error: upErr } = await supabase.storage.from('thumbnails').upload(path, file, { contentType: file.type, upsert: false })
       if (upErr) throw upErr
+      uploadedPath = path
       const { data: urlData } = supabase.storage.from('thumbnails').getPublicUrl(path)
-      setQrisUrl(urlData.publicUrl); setPreview(urlData.publicUrl)
-      toast.success('Gambar diupload')
-    } catch (err) { toast.error('Gagal upload: ' + err.message) }
+      uploadedUrl = urlData.publicUrl
+      await persistQrisUrl(uploadedUrl)
+      setQrisUrl(uploadedUrl); setPreview(uploadedUrl)
+      uploadedPath = null
+      toast.success('QRIS diunggah dan langsung disimpan')
+    } catch (err) {
+      if (uploadedPath && uploadedUrl) {
+        // The update may have reached the server even if its response was lost.
+        const { data: saved } = await supabase.from('app_settings').select('value').eq('key', 'qris_image_url').single()
+        if (saved?.value === uploadedUrl) {
+          setQrisUrl(uploadedUrl); setPreview(uploadedUrl)
+          uploadedPath = null
+          toast.success('QRIS sudah tersimpan')
+          return
+        }
+      }
+      if (uploadedPath) await supabase.storage.from('thumbnails').remove([uploadedPath])
+      toast.error('Gagal upload: ' + err.message)
+    }
     finally { setUploading(false) }
   }
 
   const saveSettings = async () => {
     setSaving(true)
-    const { data, error } = await supabase.functions.invoke('admin-update-settings', {
-      body: { settings: { qris_image_url: qrisUrl } },
-    })
-    if (error || data?.error) toast.error('Gagal menyimpan: ' + (data?.error || error?.message))
-    else {
-      invalidateSettingsCache(['qris_image_url'])
+    try {
+      await persistQrisUrl(qrisUrl)
       toast.success('Pengaturan QRIS disimpan ✅')
+    } catch (error) {
+      toast.error('Gagal menyimpan: ' + error.message)
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   return (
@@ -139,6 +165,9 @@ function TabQris() {
           <span className="text-sm font-medium text-[#D62839]">{uploading ? 'Mengupload...' : 'Upload Gambar QRIS'}</span>
           <input type="file" accept="image/*" className="hidden" onChange={handleFile} disabled={uploading} />
         </label>
+        <p className="text-xs leading-relaxed text-[#6B7280]">
+          Gambar yang diunggah akan langsung disimpan dan ditampilkan pada halaman Top Up pengguna.
+        </p>
         <div>
           <label className="block text-sm font-medium text-[#1F2937] mb-1.5">Atau masukkan URL gambar</label>
           <input type="text" value={qrisUrl}

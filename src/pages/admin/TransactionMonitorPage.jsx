@@ -35,28 +35,41 @@ export default function TransactionMonitorPage() {
 
   const fetchAll = async () => {
     setLoading(true)
-    const [txRes, topupRes, payoutRes] = await Promise.all([
-      supabase.from('transactions').select('*, profiles(nama)').order('created_at', { ascending: false }).limit(100),
-      supabase.from('topup_requests').select('*, profiles(nama)').order('created_at', { ascending: false }),
-      supabase.from('payout_requests').select('*, profiles(nama)').order('created_at', { ascending: false }),
-    ])
-    setTransactions(txRes.data ?? [])
-    const topupsWithProof = await Promise.all((topupRes.data ?? []).map(async (request) => {
-      if (!request.bukti_transfer_url) return request
-      if (/^https?:\/\//.test(request.bukti_transfer_url)) return { ...request, proof_url: request.bukti_transfer_url }
-      const { data } = await supabase.storage.from('payment-proofs').createSignedUrl(request.bukti_transfer_url, 300)
-      return { ...request, proof_url: data?.signedUrl ?? null }
-    }))
-    setTopupReqs(topupsWithProof)
-    setPayoutReqs(payoutRes.data ?? [])
-    setLoading(false)
+    try {
+      const [txRes, topupRes, payoutRes] = await Promise.all([
+        supabase.from('transactions').select('*, profiles(nama)').order('created_at', { ascending: false }).limit(100),
+        supabase.from('topup_requests').select('*, profiles(nama)').order('created_at', { ascending: false }),
+        supabase.from('payout_requests').select('*, profiles(nama)').order('created_at', { ascending: false }),
+      ])
+      const queryError = txRes.error || topupRes.error || payoutRes.error
+      if (queryError) throw queryError
+
+      setTransactions(txRes.data ?? [])
+      const topupsWithProof = await Promise.all((topupRes.data ?? []).map(async (request) => {
+        if (!request.bukti_transfer_url) return { ...request, proof_url: null }
+        if (/^https?:\/\//.test(request.bukti_transfer_url)) return { ...request, proof_url: request.bukti_transfer_url }
+        const { data, error } = await supabase.storage.from('payment-proofs').createSignedUrl(request.bukti_transfer_url, 300)
+        return { ...request, proof_url: error ? null : data?.signedUrl ?? null }
+      }))
+      setTopupReqs(topupsWithProof)
+      setPayoutReqs(payoutRes.data ?? [])
+    } catch (error) {
+      toast.error('Gagal memuat transaksi: ' + error.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { fetchAll() }, [])
 
   const approveTopup = async (id, action) => {
+    if (action === 'selesai' && !window.confirm('Pastikan nominal pada bukti sesuai dan dana QRIS sudah benar-benar masuk. Setujui top up ini?')) return
     const note = action === 'ditolak' ? window.prompt('Alasan penolakan:') : ''
     if (action === 'ditolak' && note === null) return
+    if (action === 'ditolak' && !note.trim()) {
+      toast.error('Alasan penolakan wajib diisi')
+      return
+    }
     setProcessing(id)
     try {
       const { data, error } = await supabase.functions.invoke('admin-approve-topup', {
@@ -74,8 +87,13 @@ export default function TransactionMonitorPage() {
   }
 
   const resolvePayout = async (id, action) => {
-    const note = action === 'ditolak' ? window.prompt('Alasan penolakan:') : window.prompt('Catatan (opsional):')
-    if (action === 'ditolak' && note === null) return
+    if (action === 'selesai' && !window.confirm('Pastikan uang sudah ditransfer ke rekening/e-wallet kreator. Tandai pencairan ini selesai?')) return
+    const note = action === 'ditolak' ? window.prompt('Alasan penolakan:') : window.prompt('Nomor referensi/catatan transfer (opsional):')
+    if (note === null) return
+    if (action === 'ditolak' && !note.trim()) {
+      toast.error('Alasan penolakan wajib diisi')
+      return
+    }
     setProcessing(id)
     try {
       const { data, error } = await supabase.functions.invoke('admin-resolve-payout', {
@@ -244,19 +262,22 @@ export default function TransactionMonitorPage() {
           ) : (
             <div className="divide-y divide-[#F1D4D6]">
               {topupReqs.map(r => (
-                <div key={r.id} className="px-5 py-4 flex items-center gap-3">
+                <div key={r.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-[#1F2937] text-sm">{r.profiles?.nama || 'User'}</p>
                     <p className="text-[#6B7280] text-xs">{r.jumlah_koin} koin · Rp{r.jumlah_rupiah.toLocaleString('id-ID')} · {formatDate(r.created_at)}</p>
                     {r.proof_url && (
                       <a href={r.proof_url} target="_blank" rel="noopener noreferrer" className="text-[#D62839] text-xs font-medium hover:underline">📎 Lihat Bukti Transfer (tautan 5 menit)</a>
                     )}
+                    {!r.proof_url && r.status === 'pending' && (
+                      <p className="text-[#DC2626] text-xs font-medium">Bukti tidak dapat dibuka - jangan setujui sebelum diperiksa.</p>
+                    )}
                     {r.admin_note && <p className="text-[#6B7280] text-xs italic">{r.admin_note}</p>}
                   </div>
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_STYLE[r.status]}`}>{r.status}</span>
                   {r.status === 'pending' && (
-                    <div className="flex gap-1.5">
-                      <button onClick={() => approveTopup(r.id, 'selesai')} disabled={processing === r.id}
+                    <div className="flex flex-wrap gap-1.5">
+                      <button onClick={() => approveTopup(r.id, 'selesai')} disabled={processing === r.id || !r.proof_url}
                         className="flex items-center gap-1 bg-[#059669] hover:bg-[#047857] disabled:opacity-50 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors">
                         {processing === r.id ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />} Setujui & Kirim Koin
                       </button>

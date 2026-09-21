@@ -94,6 +94,9 @@ export default function WalletPage() {
     }
     if (!buktiFile) { toast.error('Bukti transfer wajib diunggah'); return }
     setSubmitting(true)
+    const idempotencyKey = topupKey || crypto.randomUUID()
+    setTopupKey(idempotencyKey)
+    let uploadedProofPath = null
     try {
       const extension = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[buktiFile.type]
       const path = `${profile.id}/${crypto.randomUUID()}.${extension}`
@@ -101,21 +104,47 @@ export default function WalletPage() {
         .from('payment-proofs')
         .upload(path, buktiFile, { contentType: buktiFile.type, upsert: false })
       if (upErr) throw upErr
+      uploadedProofPath = path
 
-      const idempotencyKey = topupKey || crypto.randomUUID()
-      setTopupKey(idempotencyKey)
-
-      await submitTopupRequest({
+      const result = await submitTopupRequest({
         jumlah_koin: selectedKoin,
         bukti_transfer_url: path,
         idempotency_key: idempotencyKey,
       })
 
+      // A retry may upload a new proof for a request that already exists.
+      // Remove that unreferenced duplicate so private storage stays clean.
+      if (result?.already_submitted) {
+        await supabase.storage.from('payment-proofs').remove([path])
+      }
+      uploadedProofPath = null
       setStep(3)
       setTopupKey(null)
       setBuktiFile(null)
       loadRequests()
     } catch (err) {
+      if (uploadedProofPath) {
+        // A lost network response does not mean the server failed. Check the
+        // idempotency key before deleting a proof that may already be linked.
+        const { data: existing, error: lookupError } = await supabase
+          .from('topup_requests')
+          .select('id, bukti_transfer_url')
+          .eq('user_id', profile.id)
+          .eq('idempotency_key', idempotencyKey)
+          .maybeSingle()
+        if (existing) {
+          if (existing.bukti_transfer_url !== uploadedProofPath) {
+            await supabase.storage.from('payment-proofs').remove([uploadedProofPath])
+          }
+          setStep(3)
+          setTopupKey(null)
+          setBuktiFile(null)
+          loadRequests()
+          return
+        }
+        // If the lookup also failed, keep the private file for a safe retry.
+        if (!lookupError) await supabase.storage.from('payment-proofs').remove([uploadedProofPath])
+      }
       toast.error(err.message || 'Gagal mengirim permintaan')
     } finally {
       setSubmitting(false)
@@ -215,6 +244,14 @@ export default function WalletPage() {
               <h2 className="font-bold text-[#1F2937] flex items-center gap-2">
                 <QrCode size={18} className="text-[#D62839]" /> Top Up via QRIS
               </h2>
+              {!qrisUrl && (
+                <div className="rounded-xl border border-[#F59E0B]/30 bg-[#FFFBEB] px-4 py-3 text-sm text-[#92400E]">
+                  <p className="font-semibold">QRIS pembayaran belum diatur.</p>
+                  <p className="mt-1 text-xs leading-relaxed">
+                    Admin harus mengunggah QRIS di Admin → Pengaturan → QRIS sebelum pengguna dapat melakukan top up.
+                  </p>
+                </div>
+              )}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
                 {TOPUP_OPTIONS.map(opt => (
                   <button key={opt.koin} onClick={() => { setSelectedKoin(opt.koin); setTopupKey(null) }}
@@ -243,9 +280,18 @@ export default function WalletPage() {
                   className="w-full px-4 py-2.5 border border-[#F1D4D6] rounded-xl text-sm focus:outline-none focus:border-[#D62839]"
                 />
               </div>
-              <button onClick={() => selectedKoin && setStep(2)} disabled={!selectedKoin || !qrisUrl}
+              <button
+                onClick={() => {
+                  if (!selectedKoin) return
+                  if (!qrisUrl) {
+                    toast.error('Top up belum tersedia karena QRIS belum diatur oleh admin.')
+                    return
+                  }
+                  setStep(2)
+                }}
+                disabled={!selectedKoin}
                 className="w-full bg-[#D62839] hover:bg-[#B71C2B] disabled:opacity-40 text-white font-bold py-3 rounded-xl transition-colors">
-                Lanjut ke Pembayaran
+                {qrisUrl ? 'Lanjut ke Pembayaran' : 'QRIS Belum Diatur'}
               </button>
             </>
           )}

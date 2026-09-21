@@ -53,19 +53,24 @@ supabase db push --linked
 
 Jangan mengubah migration yang sudah diterapkan. Buat nomor migration baru.
 
-## 3. Membuat dan mengecek admin
+## 3. Akun admin dan cara mengeceknya
 
-Tidak ada akun atau password admin bawaan. Nama admin adalah nilai
-`public.profiles.nama` yang diisi saat registrasi.
+Akun admin yang aktif saat ini:
+
+- Nama: **Ekazein**
+- Email: **ekazein495@gmail.com**
+- Halaman login: `/admin/login`
+
+Password tidak disimpan di repository atau dokumentasi. Jika lupa, gunakan
+fitur lupa password pada aplikasi atau reset melalui Supabase Authentication.
 
 Untuk demo hari ini, project masih mewajibkan konfirmasi email. Agar pembuatan
 beberapa akun uji tidak terhambat, buka **Supabase > Authentication > Providers >
 Email** lalu nonaktifkan **Confirm email** sementara. Aktifkan kembali setelah
 SMTP produksi sudah disiapkan.
 
-1. Daftarkan akun dari halaman `/register`.
-2. Buka **Supabase Dashboard > SQL Editor**.
-3. Jalankan SQL berikut dengan email akun sebenarnya:
+Untuk membuat admin lain, daftarkan akun dari `/register`, buka **Supabase
+Dashboard > SQL Editor**, lalu jalankan SQL berikut dengan email akun tersebut:
 
 ```sql
 update public.profiles
@@ -75,7 +80,7 @@ where id = (
 );
 ```
 
-4. Cek daftar admin:
+Cek daftar admin:
 
 ```sql
 select u.email, p.nama, p.role, p.is_suspended, p.is_deleted
@@ -84,10 +89,49 @@ join public.profiles p on p.id = u.id
 where p.role = 'admin';
 ```
 
-5. Login melalui `/admin/login`. Gunakan password kuat dan jangan mengirim
-   password kepada siapa pun.
+Login melalui `/admin/login`. Gunakan password kuat dan jangan menaruh password
+di source code, GitHub, atau dokumentasi.
 
-## 4. Mengaktifkan Gemini tanpa paket Pro
+## 4. Alur pembayaran QRIS dan pemeriksaan admin
+
+QRIS aktif tersimpan di bucket publik `thumbnails` dengan path
+`qris/sinau-qris.jpeg`. Gambar sengaja dapat dibaca publik agar tampil pada
+halaman pembayaran, sedangkan bukti transfer pengguna disimpan di bucket privat
+`payment-proofs` dan hanya dibuka admin melalui tautan sementara.
+
+Alur top-up pengguna:
+
+1. Login, buka **Dompet > Top Up**, lalu pilih jumlah koin.
+2. Scan QRIS dan transfer dengan nominal persis yang ditampilkan.
+3. Unggah screenshot bukti JPG/PNG/WebP maksimal 5 MB.
+4. Klik **Sudah Transfer, Kirim Konfirmasi**. Status menjadi `pending` dan koin
+   belum bertambah sampai admin menyetujui.
+
+Alur pemeriksaan admin:
+
+1. Login `/admin/login`, buka **Monitor Transaksi > Permintaan Top-up**.
+2. Buka bukti transfer, cocokkan nominal, nama/waktu, lalu cek mutasi QRIS pada
+   aplikasi merchant/bank penerima.
+3. Klik **Setujui & Kirim Koin** hanya jika uang benar-benar masuk. Sistem akan
+   menambah Koin Top Up secara atomik dan mencegah persetujuan ganda.
+4. Jika tidak valid, klik **Tolak** dan isi alasan. Pengguna dapat melihat status
+   serta menerima notifikasi.
+
+Alur pencairan kreator:
+
+1. Hanya Koin Biru hasil pendapatan kreator yang dapat dicairkan; Koin Top Up
+   tidak bisa ditarik kembali menjadi uang.
+2. Kreator mengisi bank/e-wallet tujuan dan mengajukan minimal 50 koin. Saldo
+   langsung dicadangkan agar tidak dapat diajukan dua kali.
+3. Admin membuka **Permintaan Payout**, mentransfer uang ke tujuan yang tertera,
+   lalu klik **Sudah Transfer**. Jika ditolak, sistem otomatis mengembalikan Koin
+   Biru ke kreator.
+
+Ini adalah pembayaran QRIS dengan verifikasi manual, bukan payment gateway
+otomatis. Aplikasi tidak dapat memastikan dana masuk hanya dari screenshot;
+admin tetap wajib mengecek mutasi merchant sebelum menyetujui.
+
+## 5. Mengaktifkan Gemini tanpa paket Pro
 
 Langganan Gemini aplikasi konsumen dan Gemini API adalah hal berbeda. Untuk
 prototipe, buat API key di Google AI Studio dan gunakan free tier selama kuota
@@ -111,7 +155,7 @@ supabase functions deploy generate-summary --project-ref xrgkkzfzcokwixtvetfp
 Tanpa key atau saat kuota habis, aplikasi tetap membuat ringkasan/kuis fallback
 dari metadata/deskripsi video sehingga fitur inti tidak berhenti.
 
-## 5. Video 30-60 menit
+## 6. Video 30-60 menit
 
 Aplikasi tidak lagi memiliki batas durasi 15 menit. Upload sekarang memakai TUS
 resumable, retry otomatis, dan progres nyata.
@@ -128,7 +172,7 @@ berkualitas rendah. Jika kualitas tinggi wajib, penyimpanan video harus
 dipindahkan ke storage/CDN dengan kuota lebih besar; menaikkan batas di kode
 tidak dapat melewati batas akun Supabase Free.
 
-## 6. Hosting gratis dengan Cloudflare Pages
+## 7. Hosting gratis dengan Cloudflare Pages
 
 Cloudflare Pages disarankan untuk prototipe lomba:
 
@@ -153,7 +197,7 @@ output `dist`, lalu isi dua variable `VITE_*`. File `vercel.json` sudah
 menyediakan SPA rewrite. Paket Hobby Vercel ditujukan untuk penggunaan
 personal/non-komersial.
 
-## 7. Checklist sebelum presentasi
+## 8. Checklist sebelum presentasi
 
 - Nonaktifkan **Confirm email** sementara atau pastikan semua akun uji sudah
   mengonfirmasi emailnya.
@@ -161,14 +205,15 @@ personal/non-komersial.
 - Login kreator, upload satu MP4 kecil, lalu login admin dan approve.
 - Login penonton, cek preview 60 detik, top-up request, approval admin, pembelian,
   dan lanjut menonton.
-- Isi gambar QRIS di menu admin sebelum mencoba top-up.
+- Pastikan gambar QRIS tampil di halaman Top Up dan lakukan satu transaksi kecil
+  untuk menguji mutasi QRIS serta persetujuan admin.
 - Jika Gemini diperlukan, pasang secret lalu uji ringkasan dan kuis satu video.
 - Buka DevTools Console dan Network; jangan lanjut presentasi jika ada request
   merah yang terkait alur utama.
 - Jaga project Supabase Free tetap aktif; project gratis dapat dipause setelah
   tidak aktif selama periode tertentu.
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 | Gejala | Tindakan |
 |---|---|
