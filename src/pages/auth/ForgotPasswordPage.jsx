@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '../../stores/authStore'
-import { BookOpen, Loader2, CheckCircle, ArrowLeft } from 'lucide-react'
+import { Loader2, CheckCircle, ArrowLeft } from 'lucide-react'
+import BrandLogo from '../../components/BrandLogo'
 import toast from 'react-hot-toast'
 
 export default function ForgotPasswordPage() {
@@ -28,9 +29,7 @@ export default function ForgotPasswordPage() {
     <div className="min-h-screen bg-gradient-to-br from-white via-[#FDEDEE] to-[#F1D4D6] flex items-center justify-center px-4">
       <div className="w-full max-w-sm fade-in">
         <div className="text-center mb-8">
-          <div className="w-14 h-14 bg-[#D62839] rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-[#D62839]/30">
-            <BookOpen size={28} className="text-white" />
-          </div>
+          <BrandLogo size="lg" className="mx-auto mb-3" />
           <h1 className="text-2xl font-extrabold text-[#1F2937]">Lupa Password?</h1>
           <p className="text-[#6B7280] text-sm mt-1">Kami kirimkan link reset ke emailmu</p>
         </div>

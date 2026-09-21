@@ -48,6 +48,16 @@ Deno.serve(async (req: Request) => {
       return errorResponse('Video is not approved', 403)
     }
 
+    // Record one unique view through a service-only RPC. The database trigger
+    // awards exactly one blue coin to the creator for this viewer/video pair.
+    if (!isCreator && !isAdmin && video.status === 'approved') {
+      const { error: viewError } = await supabaseAdmin.rpc('record_video_view', {
+        p_viewer_id: user.id,
+        p_video_id: video_id,
+      })
+      if (viewError) return errorResponse('Failed to record video view', 500)
+    }
+
     // 6. Check paywall access for non-creator/non-admin
     //    If the video has a price, verify the viewer has paid
     let hasPaidAccess = isCreator || isAdmin || (video.harga_koin === 0)

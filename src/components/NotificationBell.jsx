@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../stores/authStore'
 import { Bell } from 'lucide-react'
+import toast from 'react-hot-toast'
 
 const TYPE_LABEL = {
   video_moderated:          (p) => `Video "${p?.judul}" ${p?.status === 'approved' ? 'disetujui ✅' : 'ditolak ❌'}`,
@@ -39,6 +40,7 @@ export default function NotificationBell({ align = 'right' }) {
   const navigate = useNavigate()
   const [notifs, setNotifs] = useState([])
   const [open, setOpen] = useState(false)
+  const [markingAll, setMarkingAll] = useState(false)
   const ref = useRef(null)
 
   // Guard: track apakah subscription sudah aktif untuk user ini
@@ -131,18 +133,21 @@ export default function NotificationBell({ align = 'right' }) {
   }, [])
 
   const markAllRead = async () => {
-    if (!user) return
-    await supabase
-      .from('notifications')
-      .update({ is_read: true })
-      .eq('user_id', user.id)
-      .eq('is_read', false)
-    setNotifs(ns => ns.map(n => ({ ...n, is_read: true })))
+    if (!user || markingAll) return
+    setMarkingAll(true)
+    const { error } = await supabase.rpc('mark_notifications_read')
+    if (error) toast.error('Gagal menandai notifikasi: ' + error.message)
+    else setNotifs(ns => ns.map(n => ({ ...n, is_read: true })))
+    setMarkingAll(false)
   }
 
   const handleClick = async (notif) => {
     if (!notif.is_read) {
-      await supabase.from('notifications').update({ is_read: true }).eq('id', notif.id)
+      const { error } = await supabase.rpc('mark_notifications_read', { p_notification_id: notif.id })
+      if (error) {
+        toast.error('Gagal memperbarui notifikasi')
+        return
+      }
       setNotifs(ns => ns.map(n => n.id === notif.id ? { ...n, is_read: true } : n))
     }
     setOpen(false)
@@ -170,8 +175,8 @@ export default function NotificationBell({ align = 'right' }) {
           <div className="flex items-center justify-between px-4 py-3 border-b border-[#F1D4D6]">
             <span className="font-bold text-[#1F2937] text-sm">Notifikasi</span>
             {unread > 0 && (
-              <button onClick={markAllRead} className="text-[#D62839] text-xs font-medium hover:underline">
-                Tandai semua dibaca
+              <button disabled={markingAll} onClick={markAllRead} className="text-[#D62839] text-xs font-medium hover:underline disabled:opacity-50">
+                {markingAll ? 'Memproses...' : 'Tandai semua dibaca'}
               </button>
             )}
           </div>

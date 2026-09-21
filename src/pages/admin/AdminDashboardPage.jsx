@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { useAppSetting } from '../../hooks/useAppSettings'
 import { Users, Film, CreditCard, Flag, Clock, TrendingUp, Coins, ArrowUpRight, Wifi, WifiOff } from 'lucide-react'
 
 function StatCard({ icon: Icon, label, value, sub, color = 'red', onClick }) {
@@ -34,8 +33,6 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [realtimeStatus, setRealtimeStatus] = useState('connecting')
   const channelsRef = useRef([])
-  const { value: revenueSplitStr } = useAppSetting('revenue_split_creator', '80')
-  const platformPct = 100 - (parseInt(revenueSplitStr ?? '80') || 80)
 
   const fetchStats = async () => {
     const [usersRes, videosRes, txRes, reportsRes, topupRes, payoutRes] = await Promise.all([
@@ -72,7 +69,6 @@ export default function AdminDashboardPage() {
       totalEarning,
       platformRevenue,
       coinsCirculated,
-      platformPct,
       pendingReports: reportsRes.count ?? 0,
       pendingTopup: topupRes.count ?? 0,
       pendingPayout: payoutRes.count ?? 0,
@@ -136,7 +132,7 @@ export default function AdminDashboardPage() {
       channelsRef.current.forEach(ch => supabase.removeChannel(ch))
       channelsRef.current = []
     }
-  }, [platformPct])
+  }, [])
 
   const pendingActions = !stats ? 0 :
     stats.pendingVideos + stats.pendingReports + stats.pendingTopup + stats.pendingPayout
@@ -213,7 +209,7 @@ export default function AdminDashboardPage() {
               sub={`≈ Rp${(stats.totalTopupKoin * 500).toLocaleString('id-ID')}`} color="yellow"
               onClick={() => navigate('/admin/transaksi')} />
             <StatCard icon={TrendingUp} label="Revenue Platform" value={`${stats.platformRevenue} koin`}
-              sub={`${stats.platformPct}% dari transaksi video`} color="green"
+              sub="Dari pembelian akses penuh video" color="green"
               onClick={() => navigate('/admin/transaksi')} />
             <StatCard icon={Coins} label="Koin Beredar" value={`${stats.coinsCirculated.toLocaleString('id-ID', { maximumFractionDigits: 2 })} koin`}
               sub="Saldo top-up + pendapatan" color="blue"

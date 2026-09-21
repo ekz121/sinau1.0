@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { useAppSetting } from '../../hooks/useAppSettings'
-import { ArrowUpRight, ArrowDownLeft, Loader2, Check, X } from 'lucide-react'
+import { ArrowUpRight, ArrowDownLeft, Loader2, Check, X, Upload } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const TYPE_MAP = {
@@ -29,9 +28,8 @@ export default function TransactionMonitorPage() {
   const [payoutReqs, setPayoutReqs] = useState([])
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(null)
+  const [payoutProofs, setPayoutProofs] = useState({})
   const [txFilter, setTxFilter] = useState('')
-  const { value: revenueSplitStr } = useAppSetting('revenue_split_creator', '80')
-  const platformPct = 100 - (parseInt(revenueSplitStr ?? '80') || 80)
 
   const fetchAll = async () => {
     setLoading(true)
@@ -52,7 +50,12 @@ export default function TransactionMonitorPage() {
         return { ...request, proof_url: error ? null : data?.signedUrl ?? null }
       }))
       setTopupReqs(topupsWithProof)
-      setPayoutReqs(payoutRes.data ?? [])
+      const payoutsWithProof = await Promise.all((payoutRes.data ?? []).map(async (request) => {
+        if (!request.bukti_payout_url) return { ...request, payout_proof_url: null }
+        const { data, error } = await supabase.storage.from('payment-proofs').createSignedUrl(request.bukti_payout_url, 300)
+        return { ...request, payout_proof_url: error ? null : data?.signedUrl ?? null }
+      }))
+      setPayoutReqs(payoutsWithProof)
     } catch (error) {
       toast.error('Gagal memuat transaksi: ' + error.message)
     } finally {
@@ -87,6 +90,11 @@ export default function TransactionMonitorPage() {
   }
 
   const resolvePayout = async (id, action) => {
+    const proof = payoutProofs[id]
+    if (action === 'selesai' && !proof) {
+      toast.error('Upload bukti transfer payout terlebih dahulu')
+      return
+    }
     if (action === 'selesai' && !window.confirm('Pastikan uang sudah ditransfer ke rekening/e-wallet kreator. Tandai pencairan ini selesai?')) return
     const note = action === 'ditolak' ? window.prompt('Alasan penolakan:') : window.prompt('Nomor referensi/catatan transfer (opsional):')
     if (note === null) return
@@ -95,15 +103,28 @@ export default function TransactionMonitorPage() {
       return
     }
     setProcessing(id)
+    let uploadedProofPath = null
     try {
+      if (action === 'selesai') {
+        const extension = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[proof.type]
+        if (!extension || proof.size > 5 * 1024 * 1024) throw new Error('Bukti harus JPG/PNG/WebP maksimal 5 MB')
+        uploadedProofPath = `payout/${id}/${crypto.randomUUID()}.${extension}`
+        const { error: uploadError } = await supabase.storage
+          .from('payment-proofs')
+          .upload(uploadedProofPath, proof, { contentType: proof.type, upsert: false })
+        if (uploadError) throw uploadError
+      }
       const { data, error } = await supabase.functions.invoke('admin-resolve-payout', {
-        body: { payout_id: id, action, admin_note: note },
+        body: { payout_id: id, action, admin_note: note, payout_proof_url: uploadedProofPath },
       })
       if (error || data?.error) throw new Error(data?.error || error?.message || 'Gagal memproses payout')
 
       toast.success(action === 'selesai' ? 'Payout diselesaikan ✅' : 'Payout ditolak, koin dikembalikan')
+      setPayoutProofs(current => { const next = { ...current }; delete next[id]; return next })
+      uploadedProofPath = null
       fetchAll()
     } catch (err) {
+      if (uploadedProofPath) await supabase.storage.from('payment-proofs').remove([uploadedProofPath])
       toast.error(err.message)
     } finally {
       setProcessing(null)
@@ -193,7 +214,7 @@ export default function TransactionMonitorPage() {
           <p className="font-bold text-[#1F2937] text-lg">{totalPurchase} koin</p>
         </div>
         <div className="bg-white border border-[#F1D4D6] rounded-2xl p-4 text-center">
-          <p className="text-[#6B7280] text-xs mb-1">Revenue Platform ({platformPct}%)</p>
+          <p className="text-[#6B7280] text-xs mb-1">Pendapatan Akses Video</p>
           <p className="font-bold text-[#D62839] text-lg">{platformRevenue.toLocaleString('id-ID', { maximumFractionDigits: 2 })} koin</p>
         </div>
       </div>
@@ -312,12 +333,29 @@ export default function TransactionMonitorPage() {
                       <p className="text-[#6B7280] text-xs mt-0.5">
                         {r.data_tujuan?.bank} · {r.data_tujuan?.nomor} · {r.data_tujuan?.nama_pemilik}
                       </p>
-                      {r.admin_note && <p className="text-[#6B7280] text-xs italic mt-0.5">{r.admin_note}</p>}
+                      {r.admin_note && <p className="text-[#6B7280] text-xs italic mt-0.5">Referensi/catatan: {r.admin_note}</p>}
+                      {r.payout_proof_url && (
+                        <a href={r.payout_proof_url} target="_blank" rel="noopener noreferrer" className="text-[#2563EB] text-xs font-medium hover:underline">Lihat bukti transfer admin</a>
+                      )}
                     </div>
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${STATUS_STYLE[r.status]}`}>{r.status}</span>
                   </div>
                   {r.status === 'pending' && (
-                    <div className="flex gap-1.5 mt-3">
+                    <div className="mt-3 space-y-2">
+                      <label className="flex w-fit cursor-pointer items-center gap-1.5 rounded-lg border border-dashed border-[#93C5FD] bg-[#EFF6FF] px-3 py-2 text-xs font-semibold text-[#1D4ED8] hover:border-[#2563EB]">
+                        <Upload size={12} /> {payoutProofs[r.id]?.name || 'Upload bukti transfer *'}
+                        <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={event => {
+                          const file = event.target.files?.[0]
+                          if (!file) return
+                          if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+                            toast.error('Bukti harus JPG/PNG/WebP maksimal 5 MB')
+                            event.target.value = ''
+                            return
+                          }
+                          setPayoutProofs(current => ({ ...current, [r.id]: file }))
+                        }} />
+                      </label>
+                      <div className="flex flex-wrap gap-1.5">
                       <button onClick={() => resolvePayout(r.id, 'selesai')} disabled={processing === r.id}
                         className="flex items-center gap-1 bg-[#059669] hover:bg-[#047857] disabled:opacity-50 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors">
                         {processing === r.id ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />} Sudah Transfer
@@ -326,6 +364,7 @@ export default function TransactionMonitorPage() {
                         className="flex items-center gap-1 bg-[#DC2626] hover:bg-[#B91C1C] disabled:opacity-50 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors">
                         <X size={11} /> Tolak & Refund
                       </button>
+                      </div>
                     </div>
                   )}
                 </div>

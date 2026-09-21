@@ -1,225 +1,153 @@
-# Setup, Admin, dan Hosting Sinau
+# Setup, Hosting, dan Pemeriksaan Sinau
 
-Status terakhir: 21 September 2026. Frontend lokal terhubung ke project Supabase
-`xrgkkzfzcokwixtvetfp`. Migration `001` sampai `015` dan seluruh Edge
-Function Sinau sudah diterapkan ke project tersebut.
+Status: 21 September 2026. Repository memakai Supabase project `xrgkkzfzcokwixtvetfp`; migration `001`–`016` dan Edge Functions utama sudah diterapkan.
 
-## 1. Menjalankan aplikasi
+## 1. Rekomendasi hosting
 
-Prasyarat: Node.js `^20.19.0` atau `>=22.12.0`.
+Gunakan **Cloudflare Pages** untuk lomba: gratis, HTTPS otomatis, domain `*.pages.dev`, dan deploy otomatis dari GitHub. Nama yang disarankan: `sinau-juri-2026`, sehingga alamatnya `https://sinau-juri-2026.pages.dev` jika masih tersedia. Netlify adalah alternatif yang sama-sama cocok. Project ini tidak dideploy ke GitHub Pages.
+
+## 2. Deploy Cloudflare Pages
+
+1. Buka **Cloudflare → Workers & Pages → Create application → Pages → Connect to Git**.
+2. Pilih repository `ekz121/sinau1.0`.
+3. Atur Production branch `main`, preset `Vite`, command `npm run build`, output `dist`, dan kosongkan Root directory.
+4. Tambahkan untuk Production dan Preview:
+   - `VITE_SUPABASE_URL` = URL project Supabase.
+   - `VITE_SUPABASE_ANON_KEY` = publishable/anon key Supabase.
+5. Klik **Save and Deploy**, lalu salin domain `pages.dev` yang diberikan.
+6. Push berikutnya ke `main` akan dideploy otomatis.
+
+## 3. Alternatif Netlify
+
+1. Pilih **Add new site → Import an existing project**, lalu repository `ekz121/sinau1.0`.
+2. Atur branch `main`, command `npm run build`, publish directory `dist`.
+3. Tambahkan dua environment variable `VITE_*` yang sama, lalu deploy.
+4. Ubah nama site bila perlu, misalnya `sinau-juri-2026`.
+
+File `public/_redirects` menangani refresh route React seperti `/admin/login`, `/wallet`, dan `/video/:id` pada kedua platform.
+
+## 4. Wajib: URL Supabase Auth
+
+Sesudah memperoleh domain produksi:
+
+1. Buka **Supabase → Authentication → URL Configuration**.
+2. Isi **Site URL** dengan domain produksi.
+3. Tambahkan Redirect URLs:
+   - `https://domain-anda.pages.dev/**`;
+   - domain Netlify bila digunakan;
+   - `http://localhost:5173/**` untuk lokal.
+4. Simpan dan tes registrasi, verifikasi email, serta lupa password.
+
+Callback aplikasi sudah mengikuti domain dan base path yang aktif.
+
+## 5. Akun juri
+
+| Peran | Email | Password |
+|---|---|---|
+| Admin Ekazein | `ekazein495@gmail.com` | `admin123` |
+| Kreator demo | `fokus20055@gmail.com` | `baimakifeka` |
+
+Admin login di `/admin/login`, kreator di `/login`. Kreator demo memiliki 500 Koin Biru = Rp250.000. Seusai lomba, ganti password admin dan hapus kredensial dari dokumentasi.
+
+Daftar admin dapat diperiksa dengan:
+
+```sql
+select u.email, p.nama, p.role, p.is_suspended, p.is_deleted
+from auth.users u join public.profiles p on p.id = u.id
+where p.role = 'admin';
+```
+
+## 6. Top-up QRIS
+
+QRIS ada pada bucket publik `thumbnails` di `qris/sinau-qris.jpeg`; bukti pembayaran berada di bucket privat `payment-proofs`.
+
+Pengguna memilih paket, memindai QRIS, mentransfer nominal persis, mengunggah JPG/PNG/WebP maksimal 5 MB, lalu mengirim konfirmasi. Status tetap `pending` dan saldo belum berubah.
+
+Admin membuka **Monitor Transaksi → Permintaan Top-up**, memeriksa bukti serta mutasi QRIS, kemudian menyetujui atau menolak. Screenshot bukan bukti final dana masuk; admin wajib memeriksa mutasi merchant/bank. Backend mencegah persetujuan ganda.
+
+## 7. Koin Biru dan payout
+
+- 1 akun unik menonton 1 video = 1 Koin Biru; view berulang tidak menggandakan hadiah.
+- 1 Koin Biru = Rp500; minimum payout 50 koin = Rp25.000.
+- 500 Koin Biru = Rp250.000.
+- Koin Top Up tidak dapat dicairkan.
+
+Kreator mengisi jumlah dan rekening/e-wallet. Saldo langsung dicadangkan. Admin memeriksa data, mentransfer nilai Rupiah, mengunggah bukti transfer, mengisi catatan/referensi, lalu memilih **Sudah Transfer**. Tanpa bukti, backend menolak penyelesaian. Jika ditolak, saldo otomatis kembali. Kreator dapat melihat status dan membuka bukti melalui signed URL privat.
+
+## 8. Video panjang dan batas 200 MB
+
+Durasi video tidak dibatasi. Upload menggunakan TUS resumable, retry otomatis, dan progress nyata. Supabase Free membatasi satu file maksimal 50 MB dan total storage gratis 1 GB; project sengaja memvalidasi 50 MB agar server tidak menolak. Untuk 20 video, targetkan 40–45 MB per video, MP4 H.264/AAC 360p.
+
+Untuk memakai 200 MB:
+
+1. Upgrade Supabase Pro atau pindahkan video ke storage lain.
+2. Naikkan global Storage limit minimal 200 MB.
+3. Atur bucket `videos` menjadi 200 MB.
+4. Ubah `MAX_SIZE_MB` pada `src/components/FileDropzone.jsx` menjadi 200.
+5. Tambahkan migration baru dengan `file_size_limit = 209715200`.
+6. Build dan tes upload dari koneksi lambat.
+
+Jangan hanya menaikkan angka frontend pada paket Free.
+
+## 9. Gemini tanpa Pro
+
+Gemini aplikasi konsumen dan Gemini API berbeda. Langganan Pro tidak wajib selama API key Google AI Studio memiliki kuota. Simpan key sebagai secret Edge Functions, bukan variable `VITE_*`:
+
+```powershell
+supabase secrets set GEMINI_API_KEY=API_KEY_ANDA GEMINI_MODEL=gemini-2.5-flash-lite --project-ref xrgkkzfzcokwixtvetfp
+supabase functions deploy generate-quiz --project-ref xrgkkzfzcokwixtvetfp
+supabase functions deploy generate-summary --project-ref xrgkkzfzcokwixtvetfp
+```
+
+Jangan kirim key lewat chat atau GitHub. Saat key/kuota habis, fallback metadata/deskripsi menjaga fitur inti tetap berjalan.
+
+## 10. Lokal dan backend
+
+Prasyarat Node.js `^20.19.0` atau `>=22.12.0`.
 
 ```powershell
 npm install
 npm run dev
+npm run lint
+npm run build
+npm run preview
 ```
 
-Frontend hanya memerlukan dua variable berikut di file `.env`:
+File `.env` frontend:
 
 ```env
 VITE_SUPABASE_URL=https://xrgkkzfzcokwixtvetfp.supabase.co
 VITE_SUPABASE_ANON_KEY=publishable-key-dari-dashboard
 ```
 
-Publishable key aman dipakai di frontend karena akses data tetap dibatasi RLS.
-Jangan pernah menaruh `SUPABASE_SERVICE_ROLE_KEY` atau `GEMINI_API_KEY` di
-variable `VITE_*`, source React, Git, atau layanan hosting frontend.
+Publishable key boleh di frontend karena RLS membatasi akses. Jangan pernah mengekspos service-role key. Untuk project Supabase baru, jalankan `supabase link`, `supabase db push --linked`, lalu deploy semua function di folder `supabase/functions`.
 
-Verifikasi lokal:
+## 11. Checklist sebelum juri
 
-```powershell
-npm run lint
-npm run build
-npm run preview
-```
+1. Buka domain dalam mode incognito.
+2. Login kreator demo dan pastikan 500 Koin Biru tampil.
+3. Coba **Tandai semua dibaca**.
+4. Putar video demo dan periksa Studio Kreator.
+5. Login admin; buka Dashboard, Review, User, Transaksi, dan Laporan.
+6. Buat top-up kecil, unggah bukti, dan approve.
+7. Buat payout minimal; pastikan admin wajib mengunggah bukti.
+8. Buka bukti payout dari akun kreator.
+9. Refresh `/admin/login` dan `/wallet`; pastikan tidak 404.
+10. Periksa DevTools Console/Network untuk error.
+11. Siapkan MP4 kecil cadangan.
+12. Pastikan project Supabase tidak paused.
 
-## 2. Kondisi backend saat ini
+## 12. Troubleshooting
 
-Koneksi yang sudah diverifikasi:
-
-- Auth settings: HTTP 200
-- REST API `categories`: HTTP 200
-- preflight Edge Function: HTTP 200
-- migration lokal/remote: sinkron sampai `015`
-- production build: berhasil
-- smoke test akun, kreator, admin, upload, moderasi, preview, pembelian,
-  idempotensi, dan akses penuh: berhasil
-
-Jika source database berubah:
-
-```powershell
-supabase link --project-ref xrgkkzfzcokwixtvetfp
-supabase db push --linked
-```
-
-Jangan mengubah migration yang sudah diterapkan. Buat nomor migration baru.
-
-## 3. Akun admin dan cara mengeceknya
-
-Akun admin yang aktif saat ini:
-
-- Nama: **Ekazein**
-- Email: **ekazein495@gmail.com**
-- Halaman login: `/admin/login`
-
-Password tidak disimpan di repository atau dokumentasi. Jika lupa, gunakan
-fitur lupa password pada aplikasi atau reset melalui Supabase Authentication.
-
-Untuk demo hari ini, project masih mewajibkan konfirmasi email. Agar pembuatan
-beberapa akun uji tidak terhambat, buka **Supabase > Authentication > Providers >
-Email** lalu nonaktifkan **Confirm email** sementara. Aktifkan kembali setelah
-SMTP produksi sudah disiapkan.
-
-Untuk membuat admin lain, daftarkan akun dari `/register`, buka **Supabase
-Dashboard > SQL Editor**, lalu jalankan SQL berikut dengan email akun tersebut:
-
-```sql
-update public.profiles
-set role = 'admin'
-where id = (
-  select id from auth.users where email = 'email-admin-anda'
-);
-```
-
-Cek daftar admin:
-
-```sql
-select u.email, p.nama, p.role, p.is_suspended, p.is_deleted
-from auth.users u
-join public.profiles p on p.id = u.id
-where p.role = 'admin';
-```
-
-Login melalui `/admin/login`. Gunakan password kuat dan jangan menaruh password
-di source code, GitHub, atau dokumentasi.
-
-## 4. Alur pembayaran QRIS dan pemeriksaan admin
-
-QRIS aktif tersimpan di bucket publik `thumbnails` dengan path
-`qris/sinau-qris.jpeg`. Gambar sengaja dapat dibaca publik agar tampil pada
-halaman pembayaran, sedangkan bukti transfer pengguna disimpan di bucket privat
-`payment-proofs` dan hanya dibuka admin melalui tautan sementara.
-
-Alur top-up pengguna:
-
-1. Login, buka **Dompet > Top Up**, lalu pilih jumlah koin.
-2. Scan QRIS dan transfer dengan nominal persis yang ditampilkan.
-3. Unggah screenshot bukti JPG/PNG/WebP maksimal 5 MB.
-4. Klik **Sudah Transfer, Kirim Konfirmasi**. Status menjadi `pending` dan koin
-   belum bertambah sampai admin menyetujui.
-
-Alur pemeriksaan admin:
-
-1. Login `/admin/login`, buka **Monitor Transaksi > Permintaan Top-up**.
-2. Buka bukti transfer, cocokkan nominal, nama/waktu, lalu cek mutasi QRIS pada
-   aplikasi merchant/bank penerima.
-3. Klik **Setujui & Kirim Koin** hanya jika uang benar-benar masuk. Sistem akan
-   menambah Koin Top Up secara atomik dan mencegah persetujuan ganda.
-4. Jika tidak valid, klik **Tolak** dan isi alasan. Pengguna dapat melihat status
-   serta menerima notifikasi.
-
-Alur pencairan kreator:
-
-1. Hanya Koin Biru hasil pendapatan kreator yang dapat dicairkan; Koin Top Up
-   tidak bisa ditarik kembali menjadi uang.
-2. Kreator mengisi bank/e-wallet tujuan dan mengajukan minimal 50 koin. Saldo
-   langsung dicadangkan agar tidak dapat diajukan dua kali.
-3. Admin membuka **Permintaan Payout**, mentransfer uang ke tujuan yang tertera,
-   lalu klik **Sudah Transfer**. Jika ditolak, sistem otomatis mengembalikan Koin
-   Biru ke kreator.
-
-Ini adalah pembayaran QRIS dengan verifikasi manual, bukan payment gateway
-otomatis. Aplikasi tidak dapat memastikan dana masuk hanya dari screenshot;
-admin tetap wajib mengecek mutasi merchant sebelum menyetujui.
-
-## 5. Mengaktifkan Gemini tanpa paket Pro
-
-Langganan Gemini aplikasi konsumen dan Gemini API adalah hal berbeda. Untuk
-prototipe, buat API key di Google AI Studio dan gunakan free tier selama kuota
-project masih tersedia. Project Supabase baru saat ini belum memiliki
-`GEMINI_API_KEY`.
-
-Tambahkan secret dari terminal:
-
-```powershell
-supabase secrets set GEMINI_API_KEY=API_KEY_ANDA GEMINI_MODEL=gemini-2.5-flash-lite --project-ref xrgkkzfzcokwixtvetfp
-```
-
-Atau gunakan **Supabase Dashboard > Edge Functions > Secrets**. Jangan kirim API
-key lewat chat. Setelah secret disimpan, deploy ulang dua function AI:
-
-```powershell
-supabase functions deploy generate-quiz --project-ref xrgkkzfzcokwixtvetfp
-supabase functions deploy generate-summary --project-ref xrgkkzfzcokwixtvetfp
-```
-
-Tanpa key atau saat kuota habis, aplikasi tetap membuat ringkasan/kuis fallback
-dari metadata/deskripsi video sehingga fitur inti tidak berhenti.
-
-## 6. Video 30-60 menit
-
-Aplikasi tidak lagi memiliki batas durasi 15 menit. Upload sekarang memakai TUS
-resumable, retry otomatis, dan progres nyata.
-
-Batas paket Supabase Free yang tetap berlaku:
-
-- maksimal 50 MB per file;
-- total Storage 1 GB;
-- untuk 20 video, targetkan maksimal sekitar 45 MB per video agar total video
-  sekitar 900 MB dan masih ada ruang thumbnail.
-
-Kompres ke MP4 H.264/AAC, resolusi 360p. Video satu jam di bawah 45-50 MB akan
-berkualitas rendah. Jika kualitas tinggi wajib, penyimpanan video harus
-dipindahkan ke storage/CDN dengan kuota lebih besar; menaikkan batas di kode
-tidak dapat melewati batas akun Supabase Free.
-
-## 7. Hosting gratis dengan Cloudflare Pages
-
-Cloudflare Pages disarankan untuk prototipe lomba:
-
-1. Push repository ke GitHub atau GitLab. Pastikan file `.env` tidak ikut
-   ter-push.
-2. Buka **Cloudflare Dashboard > Workers & Pages > Create > Pages > Connect to
-   Git**.
-3. Pilih repository Sinau dan preset framework **Vite**.
-4. Isi build command `npm run build` dan output directory `dist`.
-5. Tambahkan environment variables `VITE_SUPABASE_URL` dan
-   `VITE_SUPABASE_ANON_KEY`.
-6. Deploy. File `public/_redirects` sudah menangani React Router agar refresh
-   pada `/admin/login` atau `/video/:id` tidak 404.
-7. Salin domain `https://nama.pages.dev`.
-8. Di **Supabase > Authentication > URL Configuration**, isi Site URL dengan
-   domain tersebut dan tambahkan `https://nama.pages.dev/**` ke Redirect URLs.
-9. Tes register, login user, upload, review admin, pemutaran, pembayaran koin,
-   laporan, dan logout dari domain hosting.
-
-Alternatifnya Vercel: import repository, preset Vite, build `npm run build`,
-output `dist`, lalu isi dua variable `VITE_*`. File `vercel.json` sudah
-menyediakan SPA rewrite. Paket Hobby Vercel ditujukan untuk penggunaan
-personal/non-komersial.
-
-## 8. Checklist sebelum presentasi
-
-- Nonaktifkan **Confirm email** sementara atau pastikan semua akun uji sudah
-  mengonfirmasi emailnya.
-- Buat satu akun admin dan minimal dua akun mahasiswa untuk tes penonton/kreator.
-- Login kreator, upload satu MP4 kecil, lalu login admin dan approve.
-- Login penonton, cek preview 60 detik, top-up request, approval admin, pembelian,
-  dan lanjut menonton.
-- Pastikan gambar QRIS tampil di halaman Top Up dan lakukan satu transaksi kecil
-  untuk menguji mutasi QRIS serta persetujuan admin.
-- Jika Gemini diperlukan, pasang secret lalu uji ringkasan dan kuis satu video.
-- Buka DevTools Console dan Network; jangan lanjut presentasi jika ada request
-  merah yang terkait alur utama.
-- Jaga project Supabase Free tetap aktif; project gratis dapat dipause setelah
-  tidak aktif selama periode tertentu.
-
-## 9. Troubleshooting
-
-| Gejala | Tindakan |
+| Masalah | Solusi |
 |---|---|
-| Login/data gagal | Pastikan URL dan publishable key berasal dari project `xrgkkzfzcokwixtvetfp`, lalu restart Vite. |
-| Deep link hosting 404 | Pastikan `public/_redirects` ikut ter-build atau gunakan `vercel.json`. |
-| Upload ditolak | Gunakan MP4 di bawah 50 MB dan pastikan user masih aktif. |
-| Edge Function gagal | Periksa **Supabase > Edge Functions > Logs** dan pastikan function sudah dideploy ke project baru. |
-| Gemini memakai fallback | Tambahkan `GEMINI_API_KEY`, cek kuota di AI Studio, lalu deploy ulang dua function AI. |
-| Reset password kembali ke localhost | Perbaiki Site URL dan Redirect URLs di Supabase Auth. |
+| Halaman kosong | Periksa dua environment variable `VITE_*`, lalu redeploy. |
+| Refresh route 404 | Pastikan `dist/_redirects` ada pada hasil build. |
+| Login gagal | Cek kredensial serta status suspended/deleted. |
+| Reset kembali ke URL salah | Perbaiki Site URL dan Redirect URLs Supabase. |
+| Upload >50 MB gagal | Kompres, upgrade Supabase, atau pindah storage. |
+| QRIS tidak tampil | Periksa `qris_image_url` dan object QRIS. |
+| Top-up belum masuk | Admin belum memverifikasi dan approve. |
+| Payout gagal selesai | Admin harus unggah bukti transfer dahulu. |
+| Gemini fallback | Periksa secret dan kuota, lalu deploy ulang function AI. |
+| Notifikasi tidak berubah | Login ulang dan pastikan migration 016 terpasang. |

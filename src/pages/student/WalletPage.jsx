@@ -84,7 +84,12 @@ export default function WalletPage() {
       supabase.from('payout_requests').select('*').eq('creator_id', profile?.id).order('created_at', { ascending: false }).limit(20),
     ])
     setTopupRequests(topupRes.data ?? [])
-    setPayoutRequests(payoutRes.data ?? [])
+    const payoutsWithProof = await Promise.all((payoutRes.data ?? []).map(async (request) => {
+      if (!request.bukti_payout_url) return { ...request, payout_proof_url: null }
+      const { data, error } = await supabase.storage.from('payment-proofs').createSignedUrl(request.bukti_payout_url, 300)
+      return { ...request, payout_proof_url: error ? null : data?.signedUrl ?? null }
+    }))
+    setPayoutRequests(payoutsWithProof)
   }
 
   const submitTopup = async () => {
@@ -399,7 +404,7 @@ export default function WalletPage() {
             <Banknote size={18} className="text-[#D62839]" /> Cairkan Koin Biru ke Uang
           </h2>
           <div className="bg-[#EFF6FF] border border-[#BFDBFE] rounded-xl p-3.5 text-xs text-[#1E40AF] leading-relaxed">
-            💡 <span className="font-semibold">Informasi Payout:</span> Hanya <span className="font-bold">Koin Biru (Pendapatan Kreator)</span> yang dapat dicairkan menjadi Rupiah. Saldo Koin Biru kamu: <span className="font-bold text-[#1D4ED8]">{Number(profile?.saldo_koin_kreator ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 2 })} koin</span>. Minimum pencairan {minPayout} koin.
+            💡 <span className="font-semibold">Informasi Payout:</span> Setiap 1 penonton unik memberi kreator <span className="font-bold">1 Koin Biru</span>. Nilai 1 koin = Rp{koinRate.toLocaleString('id-ID')}. Saldo Koin Biru kamu: <span className="font-bold text-[#1D4ED8]">{Number(profile?.saldo_koin_kreator ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 2 })} koin</span> atau sekitar <span className="font-bold">Rp{(Number(profile?.saldo_koin_kreator ?? 0) * koinRate).toLocaleString('id-ID')}</span>. Minimum pencairan {minPayout} koin.
           </div>
 
           <div className="space-y-3">
@@ -456,7 +461,10 @@ export default function WalletPage() {
                       <div>
                         <span className="font-medium text-[#1F2937]">{r.jumlah_koin} koin → Rp{r.jumlah_rupiah.toLocaleString('id-ID')}</span>
                         <span className="text-[#6B7280] text-xs ml-2">{formatDate(r.created_at)}</span>
-                        {r.admin_note && <p className="text-[#6B7280] text-xs">{r.admin_note}</p>}
+                        {r.admin_note && <p className="text-[#6B7280] text-xs">Referensi/catatan: {r.admin_note}</p>}
+                        {r.payout_proof_url && (
+                          <a href={r.payout_proof_url} target="_blank" rel="noopener noreferrer" className="block text-[#2563EB] text-xs font-semibold hover:underline">Lihat bukti transfer dari admin</a>
+                        )}
                       </div>
                       <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${s.color}`}>
                         <Icon size={10} /> {s.label}

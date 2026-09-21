@@ -1,7 +1,8 @@
 import { NavLink } from 'react-router-dom'
-import { Home, Upload, Wallet, User, BarChart2, BookOpen, Coins, LogOut, History } from 'lucide-react'
+import { Home, Upload, Wallet, User, BarChart2, Coins, LogOut, History } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 import NotificationBell from './NotificationBell'
+import BrandLogo from './BrandLogo'
 
 const navItems = [
   { to: '/', icon: Home, label: 'Jelajahi', exact: true },
@@ -20,9 +21,7 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="px-5 h-14 flex items-center border-b border-[#F1D4D6]">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-[#D62839] to-[#4F46E5] rounded-xl flex items-center justify-center shadow-md shadow-[#D62839]/20">
-            <BookOpen size={16} className="text-white" />
-          </div>
+          <BrandLogo />
           <span className="font-extrabold text-[#D62839] text-lg tracking-tight">Sinau</span>
         </div>
       </div>

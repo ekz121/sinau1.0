@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
-import { BookOpen, Coins } from 'lucide-react'
+import { Coins } from 'lucide-react'
 import NotificationBell from './NotificationBell'
+import BrandLogo from './BrandLogo'
 
 export default function Navbar() {
   const { profile } = useAuthStore()
@@ -10,9 +11,7 @@ export default function Navbar() {
     <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-white shadow-[0_8px_30px_rgba(31,41,55,0.05)]">
       <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
         <Link to="/" className="flex items-center gap-2 flex-shrink-0">
-          <div className="w-8 h-8 bg-gradient-to-br from-[#D62839] to-[#4F46E5] rounded-xl flex items-center justify-center shadow-md shadow-[#D62839]/20">
-            <BookOpen size={16} className="text-white" />
-          </div>
+          <BrandLogo />
           <span className="font-extrabold text-[#D62839] text-lg tracking-tight">Sinau</span>
         </Link>
 

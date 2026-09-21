@@ -13,9 +13,8 @@ export default function UploadPage() {
   const { user } = useAuthStore()
   const navigate = useNavigate()
   const categories = useCategoryNames()
-  const { settings } = useAppSettings(['koin_to_rupiah_rate', 'revenue_split_creator'])
+  const { settings } = useAppSettings(['koin_to_rupiah_rate'])
   const koinRate = parseInt(settings.koin_to_rupiah_rate ?? '500') || 500
-  const creatorSplit = parseInt(settings.revenue_split_creator ?? '80') || 80
 
   const [file, setFile] = useState(null)
   const [duration, setDuration] = useState(null)
@@ -334,7 +333,7 @@ export default function UploadPage() {
             </div>
             <span className="text-[#6B7280] text-sm">= Rp{koinRate.toLocaleString('id-ID')}</span>
           </div>
-          <p className="text-[#6B7280] text-xs mt-1.5">💡 Harga otomatis 1 koin per video. Kamu dapat {creatorSplit}% dari setiap pembayaran.</p>
+          <p className="text-[#6B7280] text-xs mt-1.5">💡 Harga akses penuh otomatis 1 koin. Kreator mendapat 1 Koin Biru untuk setiap penonton unik.</p>
         </div>
       </div>
 

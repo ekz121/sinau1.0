@@ -52,7 +52,8 @@ export default function DashboardPage() {
   // Baca min_payout dari app_settings — tombol cairkan aktif jika saldo >= min
   const { value: minPayoutStr } = useAppSetting('min_payout_koin', '50')
   const minPayout = parseInt(minPayoutStr ?? '50') || 50
-  const canPayout = (profile?.saldo_koin ?? 0) >= minPayout
+  const creatorBalance = Number(profile?.saldo_koin_kreator ?? 0)
+  const canPayout = creatorBalance >= minPayout
 
   useEffect(() => {
     if (!user) return
@@ -121,7 +122,7 @@ export default function DashboardPage() {
           }`}
         >
           <Banknote size={15} />
-          Cairkan Koin ({profile?.saldo_koin ?? 0})
+          Cairkan Koin Biru ({creatorBalance.toLocaleString('id-ID', { maximumFractionDigits: 2 })})
         </button>
       </div>
 

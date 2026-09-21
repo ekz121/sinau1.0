@@ -62,12 +62,6 @@ export default function VideoDetailPage() {
             const [hydrated] = await attachPublicProfiles([data])
             setVideo(hydrated)
             setError('')
-            if (profile?.id) {
-              supabase.from('views').upsert(
-                { video_id: id, viewer_id: profile.id, watch_percentage: 0 },
-                { onConflict: 'video_id,viewer_id' }
-              ).then(() => {})
-            }
           }
         }
         setLoading(false)

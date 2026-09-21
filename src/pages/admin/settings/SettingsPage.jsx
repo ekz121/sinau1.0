@@ -7,14 +7,14 @@ import toast from 'react-hot-toast'
 
 // ── Tab: Umum ────────────────────────────────────────────────
 function TabUmum() {
-  const [config, setConfig] = useState({ revenue_split_creator: '80', koin_to_rupiah_rate: '500', min_payout_koin: '50' })
+  const [config, setConfig] = useState({ koin_to_rupiah_rate: '500', min_payout_koin: '50' })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     supabase.from('app_settings')
       .select('key, value')
-      .in('key', ['revenue_split_creator', 'koin_to_rupiah_rate', 'min_payout_koin'])
+      .in('key', ['koin_to_rupiah_rate', 'min_payout_koin'])
       .then(({ data }) => {
         if (data) {
           const map = Object.fromEntries(data.map(r => [r.key, r.value]))
@@ -27,11 +27,11 @@ function TabUmum() {
   const save = async () => {
     setSaving(true)
     const { data, error } = await supabase.functions.invoke('admin-update-settings', {
-      body: { settings: { revenue_split_creator: config.revenue_split_creator, min_payout_koin: config.min_payout_koin } },
+      body: { settings: { min_payout_koin: config.min_payout_koin } },
     })
     if (error || data?.error) toast.error('Gagal menyimpan: ' + (data?.error || error?.message))
     else {
-      invalidateSettingsCache(['revenue_split_creator', 'koin_to_rupiah_rate', 'min_payout_koin'])
+      invalidateSettingsCache(['koin_to_rupiah_rate', 'min_payout_koin'])
       toast.success('Pengaturan disimpan ✅')
     }
     setSaving(false)
@@ -42,15 +42,9 @@ function TabUmum() {
   return (
     <div className="space-y-4 max-w-md">
       <div className="bg-white border border-[#F1D4D6] rounded-2xl p-5 space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-[#1F2937] mb-1">Revenue Kreator (%)</label>
-          <p className="text-[#6B7280] text-xs mb-2">Persentase yang diterima kreator dari setiap pembelian video. Sisanya masuk platform.</p>
-          <div className="flex items-center gap-2">
-            <input type="number" min="1" max="99" value={config.revenue_split_creator}
-              onChange={e => setConfig(c => ({ ...c, revenue_split_creator: e.target.value }))}
-              className="w-24 px-4 py-2.5 border border-[#F1D4D6] rounded-xl text-sm focus:outline-none focus:border-[#D62839]" />
-            <span className="text-[#6B7280] text-sm">% untuk kreator, {100 - parseInt(config.revenue_split_creator || 80)}% untuk platform</span>
-          </div>
+        <div className="rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] p-3 text-sm text-[#1E40AF]">
+          <p className="font-semibold">Pendapatan kreator: 1 Koin Biru per penonton unik</p>
+          <p className="mt-1 text-xs">Satu akun hanya dihitung sekali untuk setiap video. View kreator sendiri dan admin tidak menghasilkan koin.</p>
         </div>
         <div>
           <label className="block text-sm font-medium text-[#1F2937] mb-1">Nilai Tukar Koin (Rp per koin)</label>

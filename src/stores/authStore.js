@@ -1,6 +1,12 @@
 import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
 
+const appUrl = (path) => {
+  const base = import.meta.env.BASE_URL || '/'
+  const normalizedPath = path.replace(/^\//, '')
+  return new URL(`${base}${normalizedPath}`, window.location.origin).toString()
+}
+
 export const useAuthStore = create((set, get) => ({
   user: null,
   profile: null,
@@ -78,7 +84,7 @@ export const useAuthStore = create((set, get) => ({
       password,
       options: {
         data: { nama, jurusan },
-        emailRedirectTo: `${window.location.origin}/auth/verified`,
+        emailRedirectTo: appUrl('/auth/verified'),
       },
     })
     if (error) throw error
@@ -94,7 +100,7 @@ export const useAuthStore = create((set, get) => ({
 
   forgotPassword: async (email) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/reset-password`,
+      redirectTo: appUrl('/auth/reset-password'),
     })
     if (error) throw error
   },

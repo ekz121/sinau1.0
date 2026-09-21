@@ -1,76 +1,105 @@
-# Sinau — Platform Berbagi Video Edukasi v1.1.0
+# Sinau — Platform Video Edukasi
 
-Platform berbagi video kuliah berbasis koin untuk mahasiswa. Kreator upload video, penonton bayar koin untuk akses penuh, kreator mendapat revenue share.
+Sinau adalah aplikasi React + Supabase untuk berbagi video pembelajaran, top-up QRIS dengan verifikasi admin, pendapatan kreator, pencairan, moderasi, notifikasi realtime, serta kuis/ringkasan berbantuan Gemini.
 
-## Tech Stack
+## URL dan akun pemeriksaan juri
 
-| Layer | Teknologi |
-|-------|-----------|
-| Frontend | React 19, Vite 8, React Router 7, Zustand 5, Tailwind CSS 4 |
-| Backend | Supabase (PostgreSQL, Auth, Storage, Edge Functions Deno/TS) |
-| Realtime | Supabase Realtime |
-| UI Feedback | react-hot-toast |
+Source: https://github.com/ekz121/sinau1.0
 
-## Environment Variables
+Domain produksi diisi setelah deploy Cloudflare Pages atau Netlify. Lihat [SETUP.md](./SETUP.md) untuk langkah lengkap.
 
-Buat file `.env` di root project:
+| Peran | Halaman | Email | Password |
+|---|---|---|---|
+| Admin | `/admin/login` | `ekazein495@gmail.com` | `admin123` |
+| Kreator demo | `/login` | `fokus20055@gmail.com` | `baimakifeka` |
+
+Nama admin: **Ekazein**. Akun kreator demo memiliki **500 Koin Biru**, setara **Rp250.000** pada kurs saat ini.
+
+> Kredensial di atas sengaja dicantumkan untuk pemeriksaan lomba. Segera ganti password admin dan hapus kredensial dari README setelah penjurian.
+
+## Aturan koin
+
+- Koin Top Up (kuning) dibeli pengguna lewat QRIS dan digunakan untuk membuka akses penuh video.
+- Koin Kreator (biru) didapat dari penonton unik: **1 akun melihat 1 video = 1 Koin Biru**.
+- View berulang dari akun yang sama pada video yang sama tidak memberi koin tambahan.
+- Hanya Koin Biru yang dapat dicairkan.
+- Kurs: **1 Koin Biru = Rp500**.
+- Minimum pencairan: **50 koin = Rp25.000**.
+- Setelah admin mentransfer uang, admin wajib mengunggah bukti transfer. Kreator dapat membuka bukti tersebut dari riwayat pencairan.
+
+## Alur utama
+
+### Top-up QRIS
+
+1. Pengguna membuka **Dompet → Top Up**, memilih paket, memindai QRIS, lalu mengunggah bukti pembayaran.
+2. Permintaan berstatus `pending`; saldo belum berubah.
+3. Admin membuka **Monitor Transaksi**, memeriksa bukti dan mutasi QRIS, lalu menyetujui atau menolak.
+4. Persetujuan hanya dapat diproses sekali dan menambah Koin Top Up secara atomik.
+
+### Pencairan kreator
+
+1. Kreator mengisi bank/e-wallet tujuan dan mengajukan minimal 50 Koin Biru.
+2. Saldo langsung dicadangkan agar tidak dapat diajukan dua kali.
+3. Admin mentransfer dana, mengunggah bukti transfer, lalu menyelesaikan permintaan.
+4. Jika ditolak, Koin Biru otomatis dikembalikan.
+5. Status, catatan admin, nomor referensi, dan bukti transfer terlihat oleh kreator.
+
+### Video dan hadiah view
+
+- Video harus disetujui admin sebelum tampil.
+- URL video berasal dari signed URL bucket privat.
+- View dan hadiah dicatat di backend saat video resmi diakses.
+- Satu transaksi hadiah unik mengamankan sistem dari refresh/replay.
+- Durasi video tidak dibatasi.
+- Upload menggunakan TUS resumable dengan retry dan progress.
+
+## Batas upload video
+
+Project Supabase Free hanya mengizinkan maksimal **50 MB per file**, sehingga aplikasi memakai batas 50 MB agar upload tidak gagal. Angka 200 MB baru dapat dipakai setelah upgrade Supabase Pro atau memindahkan video ke storage lain. Setelah upgrade, ubah batas bucket `videos` dan konstanta `MAX_SIZE_MB` di `src/components/FileDropzone.jsx` menjadi 200.
+
+Untuk prototipe 20 video berdurasi 30–60 menit, kompres MP4 H.264/AAC (360p, bitrate rendah). Kuota Storage Free adalah 1 GB, jadi target aman sekitar 40–45 MB per video.
+
+## Stack
+
+- React 19, Vite 8, React Router 7, Zustand, Tailwind CSS
+- Supabase PostgreSQL, Auth, Storage, Realtime, Edge Functions
+- Gemini API opsional untuk ringkasan dan kuis; jika key/kuota tidak tersedia, fallback lokal tetap menjaga fitur inti berjalan
+
+## Menjalankan lokal
+
+Buat `.env`:
 
 ```env
-VITE_SUPABASE_URL=https://<project-ref>.supabase.co
-VITE_SUPABASE_ANON_KEY=<anon-key>
+VITE_SUPABASE_URL=https://xrgkkzfzcokwixtvetfp.supabase.co
+VITE_SUPABASE_ANON_KEY=publishable-key-dari-supabase
 ```
 
-**Catatan keamanan:** `service_role` key **TIDAK BOLEH** ada di `.env` frontend maupun `VITE_*` variables.
+Lalu:
 
-### Edge Function Secrets (Supabase Dashboard → Settings → Edge Functions)
-
-```
-SUPABASE_URL              # Otomatis tersedia di runtime Supabase
-SUPABASE_SERVICE_ROLE_KEY # Otomatis tersedia di runtime Supabase
-GEMINI_API_KEY            # Google AI Studio — untuk fitur generate quiz AI
-GEMINI_MODEL              # Opsional; default gemini-2.5-flash-lite
+```powershell
+npm install
+npm run dev
+npm run lint
+npm run build
 ```
 
-## Setup Supabase Project
+Jangan pernah menaruh `SUPABASE_SERVICE_ROLE_KEY` atau `GEMINI_API_KEY` di `.env` frontend, source code, atau GitHub.
 
-### 1. Buat Project Baru
-- Buka [supabase.com](https://supabase.com) → New Project
-- Catat `Project URL` dan `anon key` untuk `.env`
+## Backend
 
-### 2. Jalankan Migrations (berurutan)
+Migration `001` sampai `016` sudah diterapkan pada project Supabase yang terhubung. Migration terbaru menambahkan:
 
-```bash
-# Via Supabase CLI
-supabase db push
+- notifikasi **Tandai semua dibaca** melalui RPC aman;
+- 1 Koin Biru untuk setiap view unik;
+- pencegahan kredit view ganda;
+- bukti transfer wajib untuk payout selesai;
+- akses privat bukti payout untuk admin dan pemiliknya.
 
-# Atau manual via SQL Editor di dashboard:
-# Jalankan file-file ini berurutan:
-# supabase/migrations/001_init.sql
-# supabase/migrations/002_features.sql
-# supabase/migrations/003_topup_payout.sql
-# supabase/migrations/004_social.sql
-# supabase/migrations/005_categories.sql
-# supabase/migrations/006_settings_config.sql
-# supabase/migrations/007_v1_1_foundation.sql   ← v1.1 baru
-# supabase/migrations/008_v1_1_hardening.sql    ← v1.1 baru
-# supabase/migrations/009_v1_1_coin_separation_and_storage.sql
-# supabase/migrations/010_storage_buckets_policies.sql
-# supabase/migrations/011_v1_1_full_audit_hardening.sql
-```
+Jika memakai project Supabase baru:
 
-### 3. Storage Buckets
-
-Bucket dibuat otomatis oleh migration:
-
-| Bucket | Visibility | Keterangan |
-|--------|------------|------------|
-| `videos` | **Private** | File video — akses hanya via signed URL |
-| `thumbnails` | Public | Thumbnail, avatar, bukti QRIS |
-| `payment-proofs` | **Private** | Bukti transfer top-up |
-
-### 4. Deploy Edge Functions
-
-```bash
+```powershell
+supabase link --project-ref PROJECT_REF
+supabase db push --linked
 supabase functions deploy purchase-continue
 supabase functions deploy submit-topup-request
 supabase functions deploy admin-approve-topup
@@ -83,67 +112,6 @@ supabase functions deploy admin-moderate-video
 supabase functions deploy admin-manage-user
 supabase functions deploy admin-resolve-report
 supabase functions deploy admin-update-settings
-supabase functions deploy topup-coin
 ```
 
-### 5. Aktifkan Supabase Realtime
-
-Migration 011 menambahkan tabel wallet, transaksi, notifikasi, laporan, profil, dan video ke publication Realtime. Periksa hasilnya di Dashboard → Database → Replication setelah migration diterapkan.
-
-### 6. Konfigurasi Email Auth
-
-Di Dashboard → Authentication → Email, pastikan:
-- `Confirm email` = **Enabled**
-- Konfigurasikan SMTP server (atau gunakan Supabase built-in email untuk dev)
-
-## Menjalankan Development
-
-```bash
-npm install
-npm run dev
-```
-
-## Build Production
-
-```bash
-npm run build
-# Output: dist/
-```
-
-## Fitur v1.1.0
-
-### Portal Mahasiswa
-- **Explore** — grid video approved, filter kategori dinamis, search
-- **Detail Video** — player dengan paywall (batas waktu dari `app_settings`), komentar threaded, like/dislike, follow kreator, laporan, **quiz AI otomatis**
-- **Wallet** — top-up QRIS, pencairan koin ke rekening/e-wallet
-- **Studio Kreator** — statistik per video, tombol cairkan koin
-- **Upload Video** — drag & drop, validasi ukuran/format, progress bar
-- **Notifikasi** — realtime via Supabase Realtime
-
-### Portal Admin
-- **Dashboard** — statistik platform
-- **Review Antrian** — approve/reject video pending
-- **Semua Video** — filter, pagination, edit, soft delete
-- **Manajemen User** — suspend, promote/demote admin, soft delete + audit log
-- **Monitor Transaksi** — log otomatis, approve/reject top-up & payout
-- **Laporan** — proses laporan video/komentar, hapus komentar, abaikan, atau selesaikan
-- **Pengaturan** — revenue split, minimum payout, QRIS, kategori, dan password admin
-
-### Keamanan
-- RLS aktif di semua 14 tabel
-- Operasi saldo koin hanya via Edge Functions (service_role)
-- Idempotency untuk semua operasi koin
-- Audit log aksi admin
-- Signed URL pendek untuk akses video
-
-## Konfigurasi via Admin Panel
-
-Nilai-nilai berikut bisa diubah admin tanpa redeploy:
-
-| Setting | Default | Keterangan |
-|---------|---------|------------|
-| `revenue_split_creator` | 80 | Persen pendapatan kreator |
-| `koin_to_rupiah_rate` | 500 | 1 koin = Rp500 (aturan tetap) |
-| `min_payout_koin` | 50 | Minimum pencairan |
-| `free_preview_seconds` | 60 | Durasi preview gratis (aturan tetap) |
-| `qris_image_url` | — | URL gambar QRIS untuk top-up |
+Panduan deployment, konfigurasi Supabase Auth, Gemini, pemeriksaan transaksi, dan checklist juri ada di [SETUP.md](./SETUP.md).

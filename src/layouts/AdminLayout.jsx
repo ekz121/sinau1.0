@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import { Outlet, NavLink } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { supabase } from '../lib/supabase'
-import { Film, Video, Users, CreditCard, Flag, BookOpen, LogOut, LayoutDashboard, Settings, Menu, X } from 'lucide-react'
+import { Film, Video, Users, CreditCard, Flag, LogOut, LayoutDashboard, Settings, Menu, X } from 'lucide-react'
 import NotificationBell from '../components/NotificationBell'
+import BrandLogo from '../components/BrandLogo'
 
 const adminNav = [
   { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', exact: true },
@@ -56,9 +57,7 @@ export default function AdminLayout() {
       <aside className={`w-64 bg-gradient-to-b from-[#111827] via-[#1F2937] to-[#312E81] min-h-screen fixed left-0 top-0 bottom-0 z-40 flex flex-col shadow-2xl transition-transform duration-300 lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         {/* Logo */}
         <div className="px-5 h-14 flex items-center gap-2 border-b border-white/10">
-          <div className="w-8 h-8 bg-gradient-to-br from-[#D62839] to-[#6366F1] rounded-xl flex items-center justify-center shadow-lg shadow-[#D62839]/25">
-            <BookOpen size={14} className="text-white" />
-          </div>
+          <BrandLogo dark />
           <span className="font-extrabold text-white text-base tracking-tight">Sinau</span>
           <span className="ml-auto bg-[#D62839] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">ADMIN</span>
           <button aria-label="Tutup menu" onClick={() => setMobileMenuOpen(false)} className="ml-1 p-1 text-white/60 hover:text-white lg:hidden">

@@ -12,17 +12,26 @@ Deno.serve(async (req: Request) => {
     if (profile?.role !== 'admin' || profile.is_suspended || profile.is_deleted)
       return errorResponse('Admin access required', 403)
 
-    const { payout_id, action, admin_note } = await req.json()
+    const { payout_id, action, admin_note, payout_proof_url } = await req.json()
     if (!payout_id) return errorResponse('payout_id is required')
     if (!['selesai', 'ditolak'].includes(action))
       return errorResponse('action must be selesai or ditolak')
     if (admin_note && (typeof admin_note !== 'string' || admin_note.length > 500))
       return errorResponse('admin_note tidak valid')
+    if (action === 'selesai') {
+      if (typeof payout_proof_url !== 'string' || !payout_proof_url.startsWith(`payout/${payout_id}/`) || payout_proof_url.includes('..'))
+        return errorResponse('Bukti transfer payout wajib diunggah')
+      const { error: proofError } = await supabaseAdmin.storage
+        .from('payment-proofs')
+        .createSignedUrl(payout_proof_url, 60)
+      if (proofError) return errorResponse('File bukti transfer payout tidak ditemukan')
+    }
 
     const { data: result, error } = await supabaseAdmin.rpc('resolve_payout', {
       p_payout_id: payout_id,
       p_action: action,
       p_note: admin_note || null,
+      p_bukti_payout_url: action === 'selesai' ? payout_proof_url : null,
     })
     if (error) {
       const status = error.message?.includes('not found') ? 404 : 500
@@ -34,7 +43,11 @@ Deno.serve(async (req: Request) => {
     const { error: notifError } = await supabaseAdmin.from('notifications').insert({
       user_id: result.creator_id,
       type: notifType,
-      payload_json: { jumlah_koin: result.jumlah_koin, admin_note: admin_note || null },
+      payload_json: {
+        jumlah_koin: result.jumlah_koin,
+        admin_note: admin_note || null,
+        has_transfer_proof: action === 'selesai',
+      },
     })
     if (notifError) console.error('[resolve-payout] notification:', notifError.message)
 

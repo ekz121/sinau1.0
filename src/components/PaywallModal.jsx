@@ -8,9 +8,8 @@ export default function PaywallModal({ video, userBalance, onPay, onClose }) {
   const navigate = useNavigate()
   const hasEnough = userBalance >= (video?.harga_koin ?? 0)
 
-  const { settings } = useAppSettings(['koin_to_rupiah_rate', 'revenue_split_creator', 'free_preview_seconds'])
+  const { settings } = useAppSettings(['koin_to_rupiah_rate', 'free_preview_seconds'])
   const koinRate = parseInt(settings.koin_to_rupiah_rate ?? '500') || 500
-  const creatorSplit = parseInt(settings.revenue_split_creator ?? '80') || 80
   const previewSeconds = parseInt(settings.free_preview_seconds ?? '60') || 60
   const previewLabel = previewSeconds % 60 === 0
     ? `${previewSeconds / 60} menit`
@@ -110,7 +109,7 @@ export default function PaywallModal({ video, userBalance, onPay, onClose }) {
 
         {/* Fine print */}
         <p className="text-center text-[#6B7280] text-xs mt-4">
-          1 koin = Rp{koinRate.toLocaleString('id-ID')} · Kreator mendapat {creatorSplit}% dari pembayaran
+          1 koin = Rp{koinRate.toLocaleString('id-ID')} · Kreator mendapat 1 Koin Biru per penonton unik
         </p>
       </div>
     </div>

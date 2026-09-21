@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../stores/authStore'
-import { BookOpen, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, Loader2 } from 'lucide-react'
+import BrandLogo from '../../components/BrandLogo'
 import toast from 'react-hot-toast'
 
 export default function LoginPage() {
@@ -31,9 +32,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm fade-in">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-14 h-14 bg-[#D62839] rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-[#D62839]/30">
-            <BookOpen size={28} className="text-white" />
-          </div>
+          <BrandLogo size="lg" className="mx-auto mb-3" />
           <h1 className="text-2xl font-extrabold text-[#1F2937]">Masuk ke Sinau</h1>
           <p className="text-[#6B7280] text-sm mt-1">Platform belajar video antar mahasiswa</p>
         </div>

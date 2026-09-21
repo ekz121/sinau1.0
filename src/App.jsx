@@ -47,7 +47,7 @@ function RouteFallback() {
   )
 }
 
-const router = createBrowserRouter([
+const routes = [
   // ── Auth Routes ──────────────────────────────────────────
   {
     path: '/login',
@@ -120,7 +120,12 @@ const router = createBrowserRouter([
 
   // ── Fallback ──────────────────────────────────────────────
   { path: '*', element: <Navigate to="/" replace /> },
-])
+]
+
+const configuredBase = import.meta.env.BASE_URL.replace(/\/$/, '')
+const router = createBrowserRouter(routes, {
+  basename: configuredBase || '/',
+})
 
 export default function App() {
   const init = useAuthStore((s) => s.init)

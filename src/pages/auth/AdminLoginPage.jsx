@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../stores/authStore'
-import { ShieldCheck, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, Loader2 } from 'lucide-react'
+import BrandLogo from '../../components/BrandLogo'
 import toast from 'react-hot-toast'
 
 export default function AdminLoginPage() {
@@ -48,9 +49,7 @@ export default function AdminLoginPage() {
     <div className="min-h-screen bg-[#1F2937] flex items-center justify-center px-4">
       <div className="w-full max-w-sm fade-in">
         <div className="text-center mb-8">
-          <div className="w-14 h-14 bg-[#D62839] rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-[#D62839]/40">
-            <ShieldCheck size={28} className="text-white" />
-          </div>
+          <BrandLogo size="lg" dark className="mx-auto mb-3" />
           <h1 className="text-2xl font-extrabold text-white">Admin Sinau</h1>
           <p className="text-white/50 text-sm mt-1">Portal Administrator</p>
         </div>

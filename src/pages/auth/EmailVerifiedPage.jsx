@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { BookOpen, CheckCircle } from 'lucide-react'
+import { CheckCircle } from 'lucide-react'
+import BrandLogo from '../../components/BrandLogo'
 
 export default function EmailVerifiedPage() {
   const navigate = useNavigate()
@@ -14,9 +15,7 @@ export default function EmailVerifiedPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-white via-[#FDEDEE] to-[#F1D4D6] flex items-center justify-center px-4">
       <div className="w-full max-w-sm fade-in text-center">
-        <div className="w-14 h-14 bg-[#D62839] rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-[#D62839]/30">
-          <BookOpen size={28} className="text-white" />
-        </div>
+        <BrandLogo size="lg" className="mx-auto mb-6" />
         <div className="w-16 h-16 bg-[#D1FAE5] rounded-full flex items-center justify-center mx-auto mb-4">
           <CheckCircle className="w-8 h-8 text-[#059669]" />
         </div>
