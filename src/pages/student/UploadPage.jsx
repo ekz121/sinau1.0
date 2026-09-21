@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../stores/authStore'
 import { supabase } from '../../lib/supabase'
+import { uploadVideoResumable } from '../../lib/resumableUpload'
 import FileDropzone from '../../components/FileDropzone'
 import { useCategoryNames } from '../../hooks/useCategories'
 import { useAppSettings } from '../../hooks/useAppSettings'
@@ -33,6 +34,10 @@ export default function UploadPage() {
 
   const videoObjUrlRef = useRef(null)
 
+  useEffect(() => () => {
+    if (videoObjUrlRef.current) URL.revokeObjectURL(videoObjUrlRef.current)
+  }, [])
+
   const set = (field) => (e) => setForm(f => ({ ...f, [field]: e.target.value }))
 
   const handleFileSelect = (selectedFile, dur) => {
@@ -56,9 +61,12 @@ export default function UploadPage() {
   const extractFrame = (videoUrl, timeInSec) => {
     const video = document.createElement('video')
     video.src = videoUrl
-    video.currentTime = timeInSec
     video.muted = true
     video.playsInline = true
+
+    video.onloadedmetadata = () => {
+      video.currentTime = Math.min(Math.max(0, timeInSec), Math.max(0, video.duration - 0.1))
+    }
 
     video.onseeked = () => {
       const canvas = document.createElement('canvas')
@@ -82,7 +90,7 @@ export default function UploadPage() {
   const handleCustomImage = (e) => {
     const imgFile = e.target.files?.[0]
     if (!imgFile) return
-    if (!imgFile.type.startsWith('image/')) { toast.error('File thumbnail harus berupa gambar'); return }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(imgFile.type)) { toast.error('Thumbnail harus JPG, PNG, atau WebP'); return }
     if (imgFile.size > 2 * 1024 * 1024) { toast.error('Ukuran gambar maksimal 2MB'); return }
 
     setCustomFile(imgFile)
@@ -102,17 +110,23 @@ export default function UploadPage() {
     setUploading(true)
     setProgress(0)
 
+    let uploadedVideoPath = null
+    let uploadedThumbPath = null
+
     try {
-      const videoPath = `${user.id}/${Date.now()}_${file.name}`
-      const thumbPath = `${user.id}/${Date.now()}_thumb.jpg`
+      const videoPath = `${user.id}/${crypto.randomUUID()}.mp4`
+      const thumbType = thumbnailBlob?.type || 'image/jpeg'
+      const thumbExt = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[thumbType] || 'jpg'
+      const thumbPath = `${user.id}/${crypto.randomUUID()}.${thumbExt}`
 
       // Upload thumbnail first (if selected/generated)
       let thumbnailUrl = null
       if (thumbnailBlob) {
         const { error: thumbErr } = await supabase.storage
           .from('thumbnails')
-          .upload(thumbPath, thumbnailBlob, { contentType: 'image/jpeg', upsert: true })
+          .upload(thumbPath, thumbnailBlob, { contentType: thumbType, upsert: false })
         if (!thumbErr) {
+          uploadedThumbPath = thumbPath
           const { data: { publicUrl } } = supabase.storage.from('thumbnails').getPublicUrl(thumbPath)
           thumbnailUrl = publicUrl
         } else {
@@ -121,18 +135,16 @@ export default function UploadPage() {
         }
       }
 
-      setProgress(20)
+      setProgress(5)
 
-      // Upload video to private bucket
-      const { error: vidErr } = await supabase.storage
-        .from('videos')
-        .upload(videoPath, file, {
-          contentType: file.type || 'video/mp4',
-          upsert: false,
-        })
-
-      if (vidErr) throw vidErr
-      setProgress(85)
+      // Resumable TUS upload: reliable for large files and reports real progress.
+      await uploadVideoResumable({
+        file,
+        objectName: videoPath,
+        onProgress: (percentage) => setProgress(Math.min(90, 5 + Math.round(percentage * 0.85))),
+      })
+      uploadedVideoPath = videoPath
+      setProgress(92)
 
       // Insert video record
       const { error: dbErr } = await supabase.from('videos').insert({
@@ -140,7 +152,7 @@ export default function UploadPage() {
         judul: form.judul.trim(),
         deskripsi: form.deskripsi.trim(),
         kategori: form.kategori,
-        harga_koin: (duration && duration <= 180) ? 0 : 1,
+        harga_koin: 1,
         video_file_url: videoPath,
         thumbnail_url: thumbnailUrl,
         durasi_detik: duration,
@@ -152,6 +164,11 @@ export default function UploadPage() {
       setProgress(100)
       setDone(true)
     } catch (err) {
+      // Prevent orphaned files if inserting the video record fails.
+      const cleanupTasks = []
+      if (uploadedVideoPath) cleanupTasks.push(supabase.storage.from('videos').remove([uploadedVideoPath]))
+      if (uploadedThumbPath) cleanupTasks.push(supabase.storage.from('thumbnails').remove([uploadedThumbPath]))
+      if (cleanupTasks.length) await Promise.allSettled(cleanupTasks)
       toast.error(err.message || 'Upload gagal. Coba lagi.')
     } finally {
       setUploading(false)
@@ -308,17 +325,14 @@ export default function UploadPage() {
           <label className="block text-sm font-medium text-[#1F2937] mb-1.5 flex items-center gap-1.5">
             <Coins size={14} className="text-[#F59E0B]" />
             Harga Lanjut Tonton
-            {duration && duration <= 180 && (
-              <span className="text-[#059669] text-xs font-normal">— Video ≤3 menit, GRATIS otomatis</span>
-            )}
           </label>
           <div className="flex items-center gap-3 bg-[#FAFAFA] border border-[#F1D4D6] rounded-xl px-4 py-3">
             <div className="flex items-center gap-1.5">
               <Coins size={16} className="text-[#F59E0B]" />
-              <span className="font-bold text-[#1F2937] text-lg">{duration && duration <= 180 ? '0' : '1'}</span>
+              <span className="font-bold text-[#1F2937] text-lg">1</span>
               <span className="text-[#6B7280] text-sm">koin</span>
             </div>
-            <span className="text-[#6B7280] text-sm">= Rp{((duration && duration <= 180 ? 0 : 1) * koinRate).toLocaleString('id-ID')}</span>
+            <span className="text-[#6B7280] text-sm">= Rp{koinRate.toLocaleString('id-ID')}</span>
           </div>
           <p className="text-[#6B7280] text-xs mt-1.5">💡 Harga otomatis 1 koin per video. Kamu dapat {creatorSplit}% dari setiap pembayaran.</p>
         </div>

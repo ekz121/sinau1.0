@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAppSetting } from '../../hooks/useAppSettings'
-import { ArrowUpRight, ArrowDownLeft, Coins, Loader2, Check, X, Clock } from 'lucide-react'
+import { ArrowUpRight, ArrowDownLeft, Loader2, Check, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const TYPE_MAP = {
   topup:    { label: 'Top Up', color: 'text-[#059669]', bg: 'bg-[#D1FAE5]', icon: ArrowDownLeft },
   purchase: { label: 'Bayar Video', color: 'text-[#DC2626]', bg: 'bg-[#FEE2E2]', icon: ArrowUpRight },
   earning:  { label: 'Pendapatan Kreator', color: 'text-[#059669]', bg: 'bg-[#D1FAE5]', icon: ArrowDownLeft },
+  payout:   { label: 'Pencairan', color: 'text-[#2563EB]', bg: 'bg-[#DBEAFE]', icon: ArrowUpRight },
+  refund:   { label: 'Pengembalian', color: 'text-[#059669]', bg: 'bg-[#D1FAE5]', icon: ArrowDownLeft },
 }
 
 const STATUS_STYLE = {
@@ -39,7 +41,13 @@ export default function TransactionMonitorPage() {
       supabase.from('payout_requests').select('*, profiles(nama)').order('created_at', { ascending: false }),
     ])
     setTransactions(txRes.data ?? [])
-    setTopupReqs(topupRes.data ?? [])
+    const topupsWithProof = await Promise.all((topupRes.data ?? []).map(async (request) => {
+      if (!request.bukti_transfer_url) return request
+      if (/^https?:\/\//.test(request.bukti_transfer_url)) return { ...request, proof_url: request.bukti_transfer_url }
+      const { data } = await supabase.storage.from('payment-proofs').createSignedUrl(request.bukti_transfer_url, 300)
+      return { ...request, proof_url: data?.signedUrl ?? null }
+    }))
+    setTopupReqs(topupsWithProof)
     setPayoutReqs(payoutRes.data ?? [])
     setLoading(false)
   }
@@ -51,84 +59,13 @@ export default function TransactionMonitorPage() {
     if (action === 'ditolak' && note === null) return
     setProcessing(id)
     try {
-      // Try Edge Function first
-      let success = false
-      try {
-        const { data, error } = await supabase.functions.invoke('admin-approve-topup', {
-          body: { request_id: id, action, admin_note: note },
-        })
-        if (!error && !data?.error) success = true
-      } catch (edgeErr) {
-        console.warn('[TransactionMonitor] admin-approve-topup edge function failed:', edgeErr)
-      }
-
-      // Fallback: direct DB operations
-      if (!success) {
-        // Get request data first
-        const { data: reqData, error: reqErr } = await supabase
-          .from('topup_requests')
-          .select('*')
-          .eq('id', id)
-          .single()
-        if (reqErr || !reqData) throw new Error('Request not found')
-        if (reqData.status !== 'pending') {
-          toast.success('Request sudah diproses sebelumnya')
-          fetchAll()
-          setProcessing(null)
-          return
-        }
-
-        if (action === 'selesai') {
-          // RPC requires service_role, so use direct DB updates as admin fallback
-          // 1. Update user balance directly
-          const { data: currentProfile, error: profileErr } = await supabase
-            .from('profiles')
-            .select('saldo_koin_topup, saldo_koin_kreator, saldo_koin')
-            .eq('id', reqData.user_id)
-            .single()
-          if (profileErr || !currentProfile) throw new Error('User profile not found')
-
-          const newTopup = (currentProfile.saldo_koin_topup ?? 0) + reqData.jumlah_koin
-          const newTotal = newTopup + (currentProfile.saldo_koin_kreator ?? 0)
-
-          const { error: balErr } = await supabase
-            .from('profiles')
-            .update({
-              saldo_koin_topup: newTopup,
-              saldo_koin: newTotal,
-            })
-            .eq('id', reqData.user_id)
-          if (balErr) throw new Error('Gagal update saldo: ' + balErr.message)
-
-          // 2. Insert transaction record
-          await supabase.from('transactions').insert({
-            user_id: reqData.user_id,
-            type: 'topup',
-            amount_koin: reqData.jumlah_koin,
-          })
-        }
-
-        // Update request status
-        const { error: updateErr } = await supabase
-          .from('topup_requests')
-          .update({ status: action, admin_note: note || null, processed_at: new Date().toISOString() })
-          .eq('id', id)
-          .eq('status', 'pending')
-        if (updateErr) throw new Error(updateErr.message)
-
-        // Notification (non-blocking)
-        supabase.from('notifications').insert({
-          user_id: reqData.user_id,
-          type: action === 'selesai' ? 'topup_approved' : 'topup_rejected',
-          payload_json: { jumlah_koin: reqData.jumlah_koin, admin_note: note || null },
-        }).then(() => {}).catch(() => {})
-      }
+      const { data, error } = await supabase.functions.invoke('admin-approve-topup', {
+        body: { request_id: id, action, admin_note: note },
+      })
+      if (error || data?.error) throw new Error(data?.error || error?.message || 'Gagal memproses top up')
 
       toast.success(action === 'selesai' ? 'Top up disetujui ✅' : 'Top up ditolak')
       fetchAll()
-      // Refresh wallet balance after top-up approval
-      await useWalletStore.getState().syncBalance()
-      await useWalletStore.getState().fetchTransactions()
     } catch (err) {
       toast.error(err.message)
     } finally {
@@ -141,40 +78,10 @@ export default function TransactionMonitorPage() {
     if (action === 'ditolak' && note === null) return
     setProcessing(id)
     try {
-      // Try Edge Function first
-      let success = false
-      try {
-        const { data, error } = await supabase.functions.invoke('admin-resolve-payout', {
-          body: { payout_id: id, action, admin_note: note },
-        })
-        if (!error && !data?.error) success = true
-      } catch (edgeErr) {
-        console.warn('[TransactionMonitor] admin-resolve-payout edge function failed:', edgeErr)
-      }
-
-      // Fallback: direct RPC
-      if (!success) {
-        const { error: rpcErr } = await supabase.rpc('resolve_payout', {
-          p_payout_id: id,
-          p_action: action,
-          p_note: note || null,
-        })
-        if (rpcErr) throw new Error(rpcErr.message)
-
-        // Notification (non-blocking)
-        const { data: payoutRow } = await supabase
-          .from('payout_requests')
-          .select('creator_id, jumlah_koin')
-          .eq('id', id)
-          .single()
-        if (payoutRow) {
-          supabase.from('notifications').insert({
-            user_id: payoutRow.creator_id,
-            type: action === 'selesai' ? 'payout_approved' : 'payout_rejected',
-            payload_json: { jumlah_koin: payoutRow.jumlah_koin, admin_note: note || null },
-          }).then(() => {}).catch(() => {})
-        }
-      }
+      const { data, error } = await supabase.functions.invoke('admin-resolve-payout', {
+        body: { payout_id: id, action, admin_note: note },
+      })
+      if (error || data?.error) throw new Error(data?.error || error?.message || 'Gagal memproses payout')
 
       toast.success(action === 'selesai' ? 'Payout diselesaikan ✅' : 'Payout ditolak, koin dikembalikan')
       fetchAll()
@@ -238,8 +145,9 @@ export default function TransactionMonitorPage() {
 
   const pendingTopup = topupReqs.filter(r => r.status === 'pending').length
   const pendingPayout = payoutReqs.filter(r => r.status === 'pending').length
-  const totalTopup = transactions.filter(t => t.type === 'topup').reduce((a, t) => a + t.amount_koin, 0)
-  const totalPurchase = transactions.filter(t => t.type === 'purchase').reduce((a, t) => a + t.amount_koin, 0)
+  const totalTopup = transactions.filter(t => t.type === 'topup').reduce((a, t) => a + Number(t.amount_koin), 0)
+  const totalPurchase = transactions.filter(t => t.type === 'purchase').reduce((a, t) => a + Number(t.amount_koin), 0)
+  const platformRevenue = transactions.filter(t => t.type === 'purchase').reduce((a, t) => a + Number(t.platform_amount_koin || 0), 0)
 
   return (
     <div className="space-y-5">
@@ -268,7 +176,7 @@ export default function TransactionMonitorPage() {
         </div>
         <div className="bg-white border border-[#F1D4D6] rounded-2xl p-4 text-center">
           <p className="text-[#6B7280] text-xs mb-1">Revenue Platform ({platformPct}%)</p>
-          <p className="font-bold text-[#D62839] text-lg">{Math.floor(totalPurchase * platformPct / 100)} koin</p>
+          <p className="font-bold text-[#D62839] text-lg">{platformRevenue.toLocaleString('id-ID', { maximumFractionDigits: 2 })} koin</p>
         </div>
       </div>
 
@@ -294,7 +202,7 @@ export default function TransactionMonitorPage() {
       {tab === 'log' && (
         <div className="bg-white border border-[#F1D4D6] rounded-2xl overflow-hidden">
           <div className="px-5 py-3 border-b border-[#F1D4D6] flex gap-2">
-            {['', 'topup', 'purchase', 'earning'].map(f => (
+            {['', 'topup', 'purchase', 'earning', 'payout', 'refund'].map(f => (
               <button key={f} onClick={() => setTxFilter(f)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${txFilter === f ? 'bg-[#D62839] text-white' : 'bg-[#FAFAFA] border border-[#F1D4D6] text-[#6B7280] hover:border-[#D62839]'}`}>
                 {f === '' ? 'Semua' : TYPE_MAP[f]?.label || f}
@@ -340,8 +248,8 @@ export default function TransactionMonitorPage() {
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-[#1F2937] text-sm">{r.profiles?.nama || 'User'}</p>
                     <p className="text-[#6B7280] text-xs">{r.jumlah_koin} koin · Rp{r.jumlah_rupiah.toLocaleString('id-ID')} · {formatDate(r.created_at)}</p>
-                    {r.bukti_transfer_url && (
-                      <a href={r.bukti_transfer_url} target="_blank" rel="noopener noreferrer" className="text-[#D62839] text-xs font-medium hover:underline">📎 Lihat Bukti Transfer</a>
+                    {r.proof_url && (
+                      <a href={r.proof_url} target="_blank" rel="noopener noreferrer" className="text-[#D62839] text-xs font-medium hover:underline">📎 Lihat Bukti Transfer (tautan 5 menit)</a>
                     )}
                     {r.admin_note && <p className="text-[#6B7280] text-xs italic">{r.admin_note}</p>}
                   </div>

@@ -6,6 +6,7 @@ import VideoCard from '../../components/VideoCard'
 import SkeletonCard from '../../components/SkeletonCard'
 import { User, UserPlus, UserCheck, ChevronLeft, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { attachPublicProfiles } from '../../lib/publicProfiles'
 
 export default function CreatorProfilePage() {
   const { id } = useParams()
@@ -23,15 +24,15 @@ export default function CreatorProfilePage() {
     if (!id) return
     setLoading(true)
     Promise.all([
-      supabase.from('profiles').select('id, nama, jurusan, avatar_url').eq('id', id).single(),
-      supabase.from('videos').select('*, profiles(nama, avatar_url)')
+      supabase.from('public_profiles').select('id, nama, jurusan, avatar_url').eq('id', id).single(),
+      supabase.from('videos').select('*')
         .eq('creator_id', id).eq('status', 'approved').eq('is_deleted', false)
         .order('created_at', { ascending: false }),
       supabase.from('follows').select('id', { count: 'exact' }).eq('creator_id', id),
-    ]).then(([profileRes, videosRes, followRes]) => {
+    ]).then(async ([profileRes, videosRes, followRes]) => {
       if (profileRes.error || !profileRes.data) { navigate('/'); return }
       setCreator(profileRes.data)
-      setVideos(videosRes.data ?? [])
+      setVideos(await attachPublicProfiles(videosRes.data))
       setFollowCount(followRes.count ?? 0)
       setLoading(false)
     })

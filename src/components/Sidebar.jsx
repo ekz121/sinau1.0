@@ -16,11 +16,11 @@ export default function Sidebar() {
   const { profile, logout } = useAuthStore()
 
   return (
-    <aside className="hidden md:flex flex-col w-60 min-h-screen bg-white border-r border-[#F1D4D6] fixed left-0 top-0 bottom-0 z-40">
+    <aside className="hidden md:flex flex-col w-60 min-h-screen bg-white/90 backdrop-blur-xl border-r border-white fixed left-0 top-0 bottom-0 z-40 shadow-[8px_0_40px_rgba(31,41,55,0.05)]">
       {/* Logo */}
       <div className="px-5 h-14 flex items-center border-b border-[#F1D4D6]">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-[#D62839] rounded-lg flex items-center justify-center">
+          <div className="w-8 h-8 bg-gradient-to-br from-[#D62839] to-[#4F46E5] rounded-xl flex items-center justify-center shadow-md shadow-[#D62839]/20">
             <BookOpen size={16} className="text-white" />
           </div>
           <span className="font-extrabold text-[#D62839] text-lg tracking-tight">Sinau</span>
@@ -66,8 +66,8 @@ export default function Sidebar() {
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
                 isActive
-                  ? 'bg-[#FDEDEE] text-[#D62839]'
-                  : 'text-[#6B7280] hover:bg-[#FAFAFA] hover:text-[#1F2937]'
+                  ? 'bg-gradient-to-r from-[#FDEDEE] to-[#EEF2FF] text-[#D62839] shadow-sm'
+                  : 'text-[#6B7280] hover:bg-[#F8FAFC] hover:text-[#1F2937]'
               }`
             }
           >

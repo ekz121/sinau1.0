@@ -39,7 +39,7 @@ export default function VideoCard({ video }) {
   return (
     <button
       onClick={() => navigate(`/video/${video.id}`)}
-      className="w-full text-left bg-white rounded-2xl overflow-hidden border border-[#F1D4D6] hover:border-[#D62839] hover:shadow-md transition-all duration-200 group"
+      className="w-full text-left bg-white/90 rounded-2xl overflow-hidden border border-white shadow-[0_8px_28px_rgba(31,41,55,0.07)] hover:border-[#D62839]/40 hover:-translate-y-1 hover:shadow-[0_16px_36px_rgba(31,41,55,0.13)] transition-all duration-300 group"
     >
       {/* Thumbnail */}
       <div className="relative aspect-video bg-[#FAFAFA] overflow-hidden">

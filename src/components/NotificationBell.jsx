@@ -16,10 +16,17 @@ const TYPE_LABEL = {
   payout_done:              ()  => 'Pencairan koin berhasil diproses ✅',
   payout_rejected:          (p) => `Pencairan ditolak, koin dikembalikan${p?.admin_note ? ': ' + p.admin_note : ''}`,
   new_video_from_following: (p) => `Video baru dari kreator yang kamu ikuti: "${p?.judul}"`,
+  admin_video_pending:      (p) => `Video baru menunggu review: "${p?.judul || 'Tanpa judul'}"`,
+  admin_topup_pending:      (p) => `Top up ${p?.jumlah_koin || ''} koin menunggu verifikasi`,
+  admin_payout_pending:     (p) => `Payout ${p?.jumlah_koin || ''} koin menunggu diproses`,
+  admin_report_pending:     () => 'Laporan konten baru menunggu ditinjau',
 }
 
 function getLink(notif) {
   const p = notif.payload_json || {}
+  if (notif.type === 'admin_video_pending') return '/admin/review'
+  if (notif.type === 'admin_topup_pending' || notif.type === 'admin_payout_pending') return '/admin/transaksi'
+  if (notif.type === 'admin_report_pending') return '/admin/laporan'
   if (['video_moderated', 'video_approved', 'video_rejected', 'new_comment', 'comment_reply', 'new_video_from_following'].includes(notif.type)) {
     return `/video/${p.video_id}`
   }

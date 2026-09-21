@@ -39,7 +39,10 @@ export default function LoginPage() {
         </div>
 
         {/* Form */}
-        <div className="bg-white rounded-2xl shadow-sm border border-[#F1D4D6] p-6 space-y-4">
+        <form
+          className="bg-white rounded-2xl shadow-sm border border-[#F1D4D6] p-6 space-y-4"
+          onSubmit={handleSubmit}
+        >
           <div>
             <label className="block text-sm font-medium text-[#1F2937] mb-1.5">Email Kampus</label>
             <input
@@ -83,7 +86,7 @@ export default function LoginPage() {
 
           <button
             id="btn-login"
-            onClick={handleSubmit}
+            type="submit"
             disabled={loading || !email || !password}
             className="w-full flex items-center justify-center gap-2 bg-[#D62839] hover:bg-[#B71C2B] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-colors"
           >
@@ -96,7 +99,7 @@ export default function LoginPage() {
               Daftar sekarang
             </Link>
           </p>
-        </div>
+        </form>
       </div>
     </div>
   )

@@ -11,8 +11,10 @@ export default function PaywallModal({ video, userBalance, onPay, onClose }) {
   const { settings } = useAppSettings(['koin_to_rupiah_rate', 'revenue_split_creator', 'free_preview_seconds'])
   const koinRate = parseInt(settings.koin_to_rupiah_rate ?? '500') || 500
   const creatorSplit = parseInt(settings.revenue_split_creator ?? '80') || 80
-  const previewSeconds = parseInt(settings.free_preview_seconds ?? '180') || 180
-  const previewMinutes = Math.floor(previewSeconds / 60)
+  const previewSeconds = parseInt(settings.free_preview_seconds ?? '60') || 60
+  const previewLabel = previewSeconds % 60 === 0
+    ? `${previewSeconds / 60} menit`
+    : `${previewSeconds} detik`
 
   const handlePay = async () => {
     if (paying) return // prevent double click
@@ -36,7 +38,7 @@ export default function PaywallModal({ video, userBalance, onPay, onClose }) {
 
         {/* Text */}
         <h2 className="text-lg font-bold text-[#1F2937] text-center mb-1">
-          {previewMinutes} Menit Gratis Habis
+          {previewLabel} gratis habis
         </h2>
         <p className="text-[#6B7280] text-sm text-center mb-5">
           Lanjutkan menonton <span className="font-semibold text-[#1F2937]">"{video?.judul}"</span> dengan membayar koin.
@@ -61,7 +63,7 @@ export default function PaywallModal({ video, userBalance, onPay, onClose }) {
           <div className="flex items-start gap-2 bg-[#FEE2E2] border border-[#FECACA] rounded-xl px-3 py-2.5 mb-4">
             <AlertCircle size={15} className="text-[#DC2626] flex-shrink-0 mt-0.5" />
             <p className="text-[#DC2626] text-xs">
-              Saldo tidak cukup. Perlu tambah{' '}
+              Saldo koin top-up tidak cukup. Perlu tambah{' '}
               <span className="font-semibold">{video?.harga_koin - userBalance} koin</span> lagi.
             </p>
           </div>

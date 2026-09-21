@@ -5,7 +5,7 @@ import Sidebar from '../components/Sidebar'
 
 export default function StudentLayout() {
   return (
-    <div className="min-h-screen bg-[#FFFFFF]">
+    <div className="min-h-screen bg-transparent">
       {/* Mobile top navbar */}
       <div className="md:hidden">
         <Navbar />
@@ -17,7 +17,7 @@ export default function StudentLayout() {
 
         {/* Main content — offset by sidebar on desktop */}
         <main className="flex-1 md:ml-60 min-h-screen">
-          <div className="max-w-5xl mx-auto px-4 py-4 pb-24 md:pb-8">
+          <div className="max-w-6xl mx-auto px-4 py-5 pb-24 md:px-6 md:py-7 md:pb-10">
             <Outlet />
           </div>
         </main>

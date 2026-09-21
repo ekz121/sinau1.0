@@ -6,11 +6,12 @@ import {
   errorResponse,
   successResponse,
 } from '../_shared/supabaseAdmin.ts'
+import { requireFullVideoAccess } from '../_shared/videoAccess.ts'
 
 // @ts-ignore
 declare const Deno: { env: { get(key: string): string | undefined } }
 
-const GEMINI_MODEL = 'gemini-2.0-flash-exp'
+const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash-lite'
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta'
 
 async function sleep(ms: number) {
@@ -159,6 +160,7 @@ Deno.serve(async (req: Request) => {
 
     const { video_id } = await req.json()
     if (!video_id) return errorResponse('video_id is required')
+    const video = await requireFullVideoAccess(user.id, video_id)
 
     // 2. Cek apakah sudah ada video-level quiz (cache)
     //    Video-level quiz dipakai semua user — tidak generate ulang
@@ -170,29 +172,11 @@ Deno.serve(async (req: Request) => {
       .maybeSingle()
 
     if (videoLevelQuiz) {
-      return successResponse({ ...videoLevelQuiz, cached: true })
-    }
-
-    // 3. Fetch video record — hanya video approved
-    const { data: video, error: vidErr } = await supabaseAdmin
-      .from('videos')
-      .select('video_file_url, deskripsi, judul, kategori, status')
-      .eq('id', video_id)
-      .single()
-
-    if (vidErr || !video) return errorResponse('Video not found', 404)
-
-    // Quiz hanya untuk video approved (atau admin yang trigger saat approve)
-    if (!['approved'].includes(video.status)) {
-      // Jika dipanggil dari admin pipeline (setelah approve), tetap proses
-      const { data: adminCheck } = await supabaseAdmin
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single()
-      if (adminCheck?.role !== 'admin') {
-        return errorResponse('Video belum disetujui', 403)
-      }
+      try {
+        const questions = JSON.parse(videoLevelQuiz.questions_json || '[]')
+        if (Array.isArray(questions) && questions.length > 0)
+          return successResponse({ ...videoLevelQuiz, cached: true })
+      } catch { /* regenerate malformed cache */ }
     }
 
     const apiKey = Deno.env.get('GEMINI_API_KEY')
@@ -224,18 +208,18 @@ Deno.serve(async (req: Request) => {
 
     // 5. Simpan sebagai video-level quiz (user_id NULL = shared cache)
     const payload = quizData as Record<string, unknown>
-    const { data: saved, error: saveErr } = await supabaseAdmin
-      .from('quiz_results')
-      .insert({
+    const quizRow = {
         video_id,
         user_id: user.id,   // creator/admin yang trigger
         ai_summary: payload.summary,
         questions_json: JSON.stringify(payload.questions),
         is_fallback: isFallback,
         is_video_level: true,
-      })
-      .select()
-      .single()
+    }
+    const saveQuery = videoLevelQuiz
+      ? supabaseAdmin.from('quiz_results').update(quizRow).eq('id', videoLevelQuiz.id)
+      : supabaseAdmin.from('quiz_results').insert(quizRow)
+    const { data: saved, error: saveErr } = await saveQuery.select().single()
 
     if (saveErr) {
       // Mungkin race condition — ambil yang sudah ada

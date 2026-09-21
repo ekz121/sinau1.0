@@ -25,11 +25,12 @@ Deno.serve(async (req: Request) => {
     // 4. Fetch video + viewer's payment status in one query
     const { data: video, error: vidErr } = await supabaseAdmin
       .from('videos')
-      .select('id, creator_id, video_file_url, durasi_detik, status, harga_koin')
+      .select('id, creator_id, video_file_url, durasi_detik, status, harga_koin, is_deleted')
       .eq('id', video_id)
       .single()
 
     if (vidErr || !video) return errorResponse('Video not found', 404)
+    if (video.is_deleted) return errorResponse('Video not found', 404)
     if (!video.video_file_url) return errorResponse('Video file not available', 404)
 
     // 5. Resolve access level
@@ -65,6 +66,8 @@ Deno.serve(async (req: Request) => {
     // 7. Sanitize video_file_url to relative storage path inside 'videos' bucket
     let cleanPath = video.video_file_url.trim()
     if (cleanPath.startsWith('http://') || cleanPath.startsWith('https://')) {
+      if (!cleanPath.includes('/storage/v1/object/'))
+        return errorResponse('Invalid video storage path', 500)
       const parts = cleanPath.split('/storage/v1/object/')
       if (parts.length > 1) {
         const pathParts = parts[1].split('/')
@@ -78,6 +81,9 @@ Deno.serve(async (req: Request) => {
     if (cleanPath.startsWith('videos/')) {
       cleanPath = cleanPath.replace(/^videos\//, '')
     }
+    cleanPath = decodeURIComponent(cleanPath).split('?')[0]
+    if (cleanPath.includes('..') || !cleanPath.startsWith(`${video.creator_id}/`))
+      return errorResponse('Invalid video storage path', 500)
 
     // 8. Generate signed URL
     //    - Full access (creator/admin/paid): TTL = video duration + 5min buffer (min 10min)
@@ -93,8 +99,8 @@ Deno.serve(async (req: Request) => {
         .select('value')
         .eq('key', 'free_preview_seconds')
         .single()
-      const previewSeconds = parseInt(previewData?.value ?? '180') || 180
-      ttlSeconds = Math.max(300, previewSeconds + 120)
+      const previewSeconds = parseInt(previewData?.value ?? '60') || 60
+      ttlSeconds = Math.max(180, previewSeconds + 120)
     }
 
     const { data: signedData, error: signErr } = await supabaseAdmin

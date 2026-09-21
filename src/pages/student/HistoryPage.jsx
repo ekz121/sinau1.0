@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../stores/authStore'
 import { History, Play, Clock, Coins } from 'lucide-react'
-import SkeletonCard from '../../components/SkeletonCard'
 import useMediaUrl from '../../hooks/useMediaUrl'
+import { attachPublicProfiles } from '../../lib/publicProfiles'
 
 function formatDate(s) {
   return new Date(s).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -31,12 +31,14 @@ export default function HistoryPage() {
     if (!user) return
     supabase
       .from('views')
-      .select('*, videos(id, judul, kategori, harga_koin, durasi_detik, thumbnail_url, profiles(nama))')
+      .select('*, videos(id, creator_id, judul, kategori, harga_koin, durasi_detik, thumbnail_url, is_deleted)')
       .eq('viewer_id', user.id)
       .order('created_at', { ascending: false })
       .limit(50)
-      .then(({ data }) => {
-        setViews((data ?? []).filter(v => v.videos && !v.videos.is_deleted))
+      .then(async ({ data }) => {
+        const visible = (data ?? []).filter(v => v.videos && !v.videos.is_deleted)
+        const hydratedVideos = await attachPublicProfiles(visible.map(v => v.videos))
+        setViews(visible.map((view, index) => ({ ...view, videos: hydratedVideos[index] })))
         setLoading(false)
       })
   }, [user])

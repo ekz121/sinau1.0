@@ -19,14 +19,14 @@ export default function QrisSettingsPage() {
   const handleFile = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (!file.type.startsWith('image/')) { toast.error('File harus berupa gambar'); return }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) { toast.error('File harus JPG, PNG, atau WebP'); return }
     if (file.size > 2 * 1024 * 1024) { toast.error('Ukuran file maksimal 2MB'); return }
 
     setUploading(true)
     try {
-      const ext = file.name.split('.').pop()
+      const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[file.type]
       const path = `qris/qris_${Date.now()}.${ext}`
-      const { error: upErr } = await supabase.storage.from('thumbnails').upload(path, file, { upsert: true })
+      const { error: upErr } = await supabase.storage.from('thumbnails').upload(path, file, { contentType: file.type, upsert: false })
       if (upErr) throw upErr
 
       const { data: urlData } = supabase.storage.from('thumbnails').getPublicUrl(path)
@@ -42,11 +42,11 @@ export default function QrisSettingsPage() {
 
   const saveSettings = async () => {
     setSaving(true)
-    const { error } = await supabase
-      .from('app_settings')
-      .upsert({ key: 'qris_image_url', value: qrisUrl })
-    if (error) {
-      toast.error('Gagal menyimpan: ' + error.message)
+    const { data, error } = await supabase.functions.invoke('admin-update-settings', {
+      body: { settings: { qris_image_url: qrisUrl } },
+    })
+    if (error || data?.error) {
+      toast.error('Gagal menyimpan: ' + (data?.error || error?.message))
     } else {
       toast.success('Pengaturan QRIS disimpan ✅')
     }

@@ -50,7 +50,7 @@ export default function ForgotPasswordPage() {
               </Link>
             </div>
           ) : (
-            <div className="space-y-4">
+            <form className="space-y-4" onSubmit={handleSubmit}>
               <div>
                 <label className="block text-sm font-medium text-[#1F2937] mb-1.5">Email Kampus</label>
                 <input
@@ -65,7 +65,7 @@ export default function ForgotPasswordPage() {
 
               <button
                 id="btn-reset-password"
-                onClick={handleSubmit}
+                type="submit"
                 disabled={loading || !email}
                 className="w-full flex items-center justify-center gap-2 bg-[#D62839] hover:bg-[#B71C2B] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-colors"
               >
@@ -75,7 +75,7 @@ export default function ForgotPasswordPage() {
               <Link to="/login" className="flex items-center justify-center gap-1 text-[#6B7280] text-sm hover:text-[#D62839] transition-colors">
                 <ArrowLeft size={14} /> Kembali ke Login
               </Link>
-            </div>
+            </form>
           )}
         </div>
       </div>

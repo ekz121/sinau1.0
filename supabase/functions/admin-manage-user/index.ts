@@ -29,12 +29,12 @@ Deno.serve(async (req: Request) => {
     // Verifikasi admin via DB
     const { data: adminProfile } = await supabaseAdmin
       .from('profiles')
-      .select('role, is_suspended')
+      .select('role, is_suspended, is_deleted')
       .eq('id', adminUser.id)
       .single()
 
     if (!adminProfile) return errorResponse('Profile not found', 404)
-    if (adminProfile.is_suspended) return errorResponse('Account suspended', 403)
+    if (adminProfile.is_suspended || adminProfile.is_deleted) return errorResponse('Account inactive', 403)
     if (adminProfile.role !== 'admin') return errorResponse('Admin access required', 403)
 
     const { target_user_id, action } = await req.json()
@@ -63,6 +63,14 @@ Deno.serve(async (req: Request) => {
     // Guard: tidak bisa suspend/delete admin lain (hanya promote/demote yang boleh)
     if (targetProfile.role === 'admin' && !['promote_admin', 'demote_admin'].includes(action)) {
       return errorResponse('Tidak bisa memodifikasi akun admin lain')
+    }
+    if (action === 'demote_admin') {
+      const { count } = await supabaseAdmin
+        .from('profiles')
+        .select('id', { count: 'exact', head: true })
+        .eq('role', 'admin')
+        .eq('is_deleted', false)
+      if ((count ?? 0) <= 1) return errorResponse('Admin terakhir tidak dapat diturunkan', 409)
     }
 
     let updatePayload: Record<string, unknown> = {}

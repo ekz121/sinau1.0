@@ -5,7 +5,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useWalletStore } from '../stores/walletStore'
 import { useAppSetting } from '../hooks/useAppSettings'
 import PaywallModal from './PaywallModal'
-import SummaryCard from './SummaryCard'
+import QuizCard from './QuizCard'
 import toast from 'react-hot-toast'
 import {
   Loader2, Play, Pause, Volume2, VolumeX, Maximize, Minimize,
@@ -29,6 +29,7 @@ export default function VideoPlayer({ video, hasPaidAlready, onPaymentSuccess })
   const containerRef = useRef(null)
   const progressRef = useRef(null)
   const hideControlsTimer = useRef(null)
+  const paidResumeTimeRef = useRef(null)
 
   const [signedUrl, setSignedUrl] = useState(null)
   const [urlLoading, setUrlLoading] = useState(true)
@@ -43,7 +44,6 @@ export default function VideoPlayer({ video, hasPaidAlready, onPaymentSuccess })
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showControls, setShowControls] = useState(true)
   const [buffered, setBuffered] = useState(0)
-  const [isSeeking, setIsSeeking] = useState(false)
   const [playbackRate, setPlaybackRate] = useState(1)
   const [showSpeedMenu, setShowSpeedMenu] = useState(false)
   const [skipIndicator, setSkipIndicator] = useState(null) // { side: 'left'|'right', text: string }
@@ -61,7 +61,7 @@ export default function VideoPlayer({ video, hasPaidAlready, onPaymentSuccess })
   const [summaryError, setSummaryError] = useState(null)
 
   const { profile } = useAuthStore()
-  const { getSignedVideoUrl, purchaseContinue, generateSummary } = useWalletStore()
+  const { getSignedVideoUrl, purchaseContinue, generateQuiz } = useWalletStore()
   const navigate = useNavigate()
 
   const { value: previewSecondsStr } = useAppSetting('free_preview_seconds', String(DEFAULT_PAYWALL_TIME))
@@ -129,12 +129,17 @@ export default function VideoPlayer({ video, hasPaidAlready, onPaymentSuccess })
     if (vid) {
       setDuration(vid.duration)
       setVolume(vid.volume)
+      if (paidResumeTimeRef.current !== null) {
+        vid.currentTime = Math.min(paidResumeTimeRef.current, Math.max(0, vid.duration - 0.1))
+        paidResumeTimeRef.current = null
+        vid.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false))
+      }
     }
   }
 
   const handleTimeUpdate = useCallback(() => {
     const vid = videoRef.current
-    if (!vid || isSeeking) return
+    if (!vid) return
 
     setCurrentTime(vid.currentTime)
 
@@ -152,7 +157,7 @@ export default function VideoPlayer({ video, hasPaidAlready, onPaymentSuccess })
         setPaywallTriggered(true)
       }
     }
-  }, [needsPaywall, isPaidSession, paywallTriggered, isSeeking, PAYWALL_TIME])
+  }, [needsPaywall, isPaidSession, paywallTriggered, PAYWALL_TIME])
 
   const handleSeeking = useCallback(() => {
     const vid = videoRef.current
@@ -174,7 +179,7 @@ export default function VideoPlayer({ video, hasPaidAlready, onPaymentSuccess })
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         if (attempt > 0) await new Promise(r => setTimeout(r, 2000))
-        const result = await generateSummary(video.id)
+        const result = await generateQuiz(video.id)
         setSummaryData(result)
         setSummaryLoading(false)
         return
@@ -209,7 +214,7 @@ export default function VideoPlayer({ video, hasPaidAlready, onPaymentSuccess })
     // Final failure
     setSummaryError(lastError?.message || 'Gagal membuat ringkasan')
     setSummaryLoading(false)
-  }, [profile?.id, video?.id, generateSummary])
+  }, [video, generateQuiz])
 
   // ── Player controls ──────────────────────────────────
   const togglePlay = () => {
@@ -360,16 +365,14 @@ export default function VideoPlayer({ video, hasPaidAlready, onPaymentSuccess })
   const handlePay = async () => {
     try {
       await purchaseContinue(video.id)
+      const resumeAt = Math.max(PAYWALL_TIME, videoRef.current?.currentTime ?? PAYWALL_TIME)
+      const fullAccessUrl = await getSignedVideoUrl(video.id)
+      paidResumeTimeRef.current = resumeAt
+      setSignedUrl(fullAccessUrl)
       setIsPaidSession(true)
       setShowPaywall(false)
       onPaymentSuccess?.()
       toast.success('Pembayaran berhasil! Selamat belajar 🎉')
-      const vid = videoRef.current
-      if (vid) {
-        vid.currentTime = PAYWALL_TIME
-        vid.play()
-        setIsPlaying(true)
-      }
     } catch (err) {
       toast.error(err.message || 'Pembayaran gagal. Coba lagi.')
       throw err
@@ -584,7 +587,7 @@ export default function VideoPlayer({ video, hasPaidAlready, onPaymentSuccess })
           {showPaywall && (
             <PaywallModal
               video={{ ...video, harga_koin: PAYWALL_COIN }}
-              userBalance={profile?.saldo_koin ?? 0}
+              userBalance={profile?.saldo_koin_topup ?? 0}
               onPay={handlePay}
               onClose={handleClosePaywall}
             />
@@ -619,23 +622,21 @@ export default function VideoPlayer({ video, hasPaidAlready, onPaymentSuccess })
           {summaryLoading ? (
             <div className="bg-white border border-[#F1D4D6] rounded-2xl p-8 flex flex-col items-center gap-3">
               <Loader2 className="w-8 h-8 text-[#D62839] animate-spin" />
-              <p className="text-[#6B7280] text-sm font-medium">AI sedang membuat ringkasan...</p>
+              <p className="text-[#6B7280] text-sm font-medium">AI sedang membuat ringkasan dan kuis...</p>
               <p className="text-[#6B7280] text-xs">Ini mungkin membutuhkan beberapa detik</p>
             </div>
           ) : summaryData ? (
-            <SummaryCard summaryData={summaryData} />
+            <QuizCard quizData={summaryData} />
           ) : summaryError ? (
             <div className="bg-white border border-[#FEE2E2] rounded-2xl p-6 flex flex-col items-center gap-3">
               <div className="w-12 h-12 bg-[#FEE2E2] rounded-full flex items-center justify-center">
                 <RotateCcw className="w-5 h-5 text-[#DC2626]" />
               </div>
-              <p className="text-[#1F2937] text-sm font-semibold">Gagal membuat ringkasan</p>
+              <p className="text-[#1F2937] text-sm font-semibold">Gagal membuat ringkasan dan kuis</p>
               <p className="text-[#6B7280] text-xs text-center max-w-xs">{summaryError}</p>
               <button
                 onClick={() => {
-                  setSummaryError(null)
-                  setVideoEnded(false)
-                  setTimeout(() => setVideoEnded(true), 100)
+                  handleEnded()
                 }}
                 className="flex items-center gap-1.5 bg-[#D62839] hover:bg-[#B71C2B] text-white font-semibold px-5 py-2.5 rounded-xl text-sm transition-colors"
               >

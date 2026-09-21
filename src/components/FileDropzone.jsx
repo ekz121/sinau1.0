@@ -1,8 +1,10 @@
 import { useState, useRef, useCallback } from 'react'
-import { Upload, FileVideo, X, CheckCircle } from 'lucide-react'
+import { Upload, FileVideo, X } from 'lucide-react'
 
-const MAX_SIZE_MB = 100
-const MAX_DURATION_MIN = 15
+// Supabase Free currently caps Storage uploads at 50 MB. Duration itself is
+// intentionally unrestricted: long videos are accepted if their compressed
+// file size stays within the plan limit.
+const MAX_SIZE_MB = 50
 const ACCEPTED_TYPES = ['video/mp4']
 
 export default function FileDropzone({ onFileSelect, disabled = false }) {
@@ -41,14 +43,6 @@ export default function FileDropzone({ onFileSelect, disabled = false }) {
     video.onloadedmetadata = () => {
       URL.revokeObjectURL(url)
       const durationSec = Math.floor(video.duration)
-      const durationMin = durationSec / 60
-
-      if (durationMin > MAX_DURATION_MIN) {
-        setError(`Durasi video melebihi batas ${MAX_DURATION_MIN} menit (durasi: ${Math.floor(durationMin)}:${String(Math.floor(durationSec % 60)).padStart(2, '0')})`)
-        setPreview(null)
-        return
-      }
-
       setPreview({ name: file.name, size: file.size, duration: durationSec })
       onFileSelect?.(file, durationSec)
     }
@@ -106,7 +100,7 @@ export default function FileDropzone({ onFileSelect, disabled = false }) {
               <p className="text-[#6B7280] text-xs mt-1">atau klik untuk pilih file</p>
             </div>
             <p className="text-[#6B7280] text-xs">
-              Format: .mp4 · Maks. {MAX_SIZE_MB}MB · Maks. {MAX_DURATION_MIN} menit
+              Format: .mp4 · Maks. {MAX_SIZE_MB}MB · Durasi tidak dibatasi
             </p>
           </div>
           <input

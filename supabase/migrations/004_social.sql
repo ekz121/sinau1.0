@@ -4,7 +4,7 @@
 
 -- ── comments ─────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.comments (
-  id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   video_id          UUID NOT NULL REFERENCES public.videos(id) ON DELETE CASCADE,
   user_id           UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   parent_comment_id UUID REFERENCES public.comments(id) ON DELETE CASCADE,
@@ -17,7 +17,7 @@ CREATE INDEX IF NOT EXISTS idx_comments_parent ON public.comments(parent_comment
 
 -- ── video_likes ───────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.video_likes (
-  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   video_id   UUID NOT NULL REFERENCES public.videos(id) ON DELETE CASCADE,
   user_id    UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   type       TEXT NOT NULL CHECK (type IN ('like', 'dislike')),
@@ -28,7 +28,7 @@ CREATE INDEX IF NOT EXISTS idx_likes_video ON public.video_likes(video_id);
 
 -- ── follows ───────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.follows (
-  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   follower_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   creator_id  UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -39,7 +39,7 @@ CREATE INDEX IF NOT EXISTS idx_follows_follower ON public.follows(follower_id);
 
 -- ── notifications ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.notifications (
-  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id      UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   type         TEXT NOT NULL,
   payload_json JSONB,

@@ -42,13 +42,14 @@ export default function ProfilePage() {
   const handleAvatarChange = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (!file.type.startsWith('image/')) { toast.error('File harus berupa gambar (JPG, PNG, WebP)'); return }
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
+    if (!allowedTypes.includes(file.type)) { toast.error('File harus berupa gambar JPG, PNG, atau WebP'); return }
     if (file.size > 2 * 1024 * 1024) { toast.error('Ukuran foto maksimal 2MB'); return }
 
     setAvatarUploading(true)
     try {
-      const ext = file.name.split('.').pop()
-      const path = `avatars/${user.id}_${Date.now()}.${ext}`
+      const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[file.type]
+      const path = `${user.id}/avatars/${Date.now()}.${ext}`
       const { error: upErr } = await supabase.storage
         .from('thumbnails')
         .upload(path, file, { contentType: file.type, upsert: true })

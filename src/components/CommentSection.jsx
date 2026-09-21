@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from '../stores/authStore'
-import { MessageCircle, Send, Loader2, Trash2, CornerDownRight } from 'lucide-react'
+import { MessageCircle, Send, Loader2, Trash2, CornerDownRight, Flag } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { attachPublicProfiles } from '../lib/publicProfiles'
 
 function formatDate(s) {
   return new Date(s).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-function CommentItem({ comment, isDeleted = false, onDelete, onReply, currentUserId, isAdmin }) {
+function CommentItem({ comment, isDeleted = false, onDelete, onReply, onReport, currentUserId, isAdmin }) {
   if (isDeleted) {
     return (
       <div className="flex gap-3">
@@ -48,6 +49,11 @@ function CommentItem({ comment, isDeleted = false, onDelete, onReply, currentUse
               <Trash2 size={11} /> Hapus
             </button>
           )}
+          {currentUserId !== comment.user_id && !isAdmin && (
+            <button onClick={() => onReport(comment.id)} className="text-[#6B7280] hover:text-[#DC2626] text-xs transition-colors flex items-center gap-1">
+              <Flag size={11} /> Laporkan
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -68,10 +74,10 @@ export default function CommentSection({ videoId }) {
     // Fetch semua komentar termasuk yang is_deleted untuk menjaga konteks reply
     const { data } = await supabase
       .from('comments')
-      .select('*, profiles(nama)')
+      .select('*')
       .eq('video_id', videoId)
       .order('created_at', { ascending: true })
-    setComments(data ?? [])
+    setComments(await attachPublicProfiles(data, 'user_id'))
     setLoading(false)
   }
 
@@ -109,6 +115,18 @@ export default function CommentSection({ videoId }) {
     }
     // Update local state — tidak filter, cukup tandai is_deleted
     setComments(cs => cs.map(c => c.id === commentId ? { ...c, is_deleted: true } : c))
+  }
+
+  const reportComment = async (commentId) => {
+    const reason = window.prompt('Jelaskan alasan melaporkan komentar ini:')
+    if (!reason?.trim()) return
+    const { error } = await supabase.from('reports').insert({
+      comment_id: commentId,
+      reporter_id: profile.id,
+      alasan: reason.trim().slice(0, 500),
+    })
+    if (error) toast.error('Gagal mengirim laporan')
+    else toast.success('Laporan komentar terkirim')
   }
 
   // Group: parent comments + their replies
@@ -173,6 +191,7 @@ export default function CommentSection({ videoId }) {
                   isDeleted={c.is_deleted}
                   onDelete={deleteComment}
                   onReply={c => setReplyTo({ id: c.id, nama: c.profiles?.nama })}
+                  onReport={reportComment}
                   currentUserId={profile?.id}
                   isAdmin={isAdmin}
                 />
@@ -185,6 +204,7 @@ export default function CommentSection({ videoId }) {
                       onDelete={deleteComment}
                       // Reply ke parent comment (bukan ke reply)
                       onReply={() => setReplyTo({ id: c.id, nama: c.profiles?.nama })}
+                      onReport={reportComment}
                       currentUserId={profile?.id}
                       isAdmin={isAdmin}
                     />

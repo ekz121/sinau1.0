@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { useCategories } from '../../../hooks/useCategories'
 import { invalidateSettingsCache } from '../../../hooks/useAppSettings'
-import { Settings, QrCode, Tag, User, Plus, Trash2, GripVertical, Upload, Loader2, Check, Eye, EyeOff } from 'lucide-react'
+import { Settings, QrCode, Tag, User, Plus, Trash2, GripVertical, Upload, Loader2, Check, Eye, EyeOff, Edit2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 // ── Tab: Umum ────────────────────────────────────────────────
@@ -26,19 +26,12 @@ function TabUmum() {
 
   const save = async () => {
     setSaving(true)
-    const rows = Object.entries(config).map(([key, value]) => ({ key, value }))
-    const { error } = await supabase.from('app_settings').upsert(rows)
-    if (error) toast.error('Gagal menyimpan: ' + error.message)
+    const { data, error } = await supabase.functions.invoke('admin-update-settings', {
+      body: { settings: { revenue_split_creator: config.revenue_split_creator, min_payout_koin: config.min_payout_koin } },
+    })
+    if (error || data?.error) toast.error('Gagal menyimpan: ' + (data?.error || error?.message))
     else {
-      // Invalidate cache agar komponen lain langsung baca nilai terbaru
       invalidateSettingsCache(['revenue_split_creator', 'koin_to_rupiah_rate', 'min_payout_koin'])
-      // Audit log
-      supabase.from('admin_audit_log').insert({
-        action: 'update_settings',
-        target_type: 'settings',
-        target_id: 'umum',
-        note: Object.keys(config).join(', '),
-      }).then(() => {})
       toast.success('Pengaturan disimpan ✅')
     }
     setSaving(false)
@@ -64,9 +57,8 @@ function TabUmum() {
           <p className="text-[#6B7280] text-xs mb-2">Harga 1 koin dalam Rupiah. Dipakai untuk kalkulasi top-up dan payout.</p>
           <div className="flex items-center gap-2">
             <span className="text-[#6B7280] text-sm">Rp</span>
-            <input type="number" min="100" value={config.koin_to_rupiah_rate}
-              onChange={e => setConfig(c => ({ ...c, koin_to_rupiah_rate: e.target.value }))}
-              className="w-28 px-4 py-2.5 border border-[#F1D4D6] rounded-xl text-sm focus:outline-none focus:border-[#D62839]" />
+            <input type="number" value="500" disabled
+              className="w-28 px-4 py-2.5 border border-[#F1D4D6] rounded-xl text-sm bg-[#F3F4F6] text-[#6B7280]" />
             <span className="text-[#6B7280] text-sm">per koin</span>
           </div>
         </div>
@@ -101,13 +93,13 @@ function TabQris() {
   const handleFile = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (!file.type.startsWith('image/')) { toast.error('File harus berupa gambar'); return }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) { toast.error('File harus JPG, PNG, atau WebP'); return }
     if (file.size > 2 * 1024 * 1024) { toast.error('Ukuran file maksimal 2MB'); return }
     setUploading(true)
     try {
-      const ext = file.name.split('.').pop()
+      const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[file.type]
       const path = `qris/qris_${Date.now()}.${ext}`
-      const { error: upErr } = await supabase.storage.from('thumbnails').upload(path, file, { upsert: true })
+      const { error: upErr } = await supabase.storage.from('thumbnails').upload(path, file, { contentType: file.type, upsert: false })
       if (upErr) throw upErr
       const { data: urlData } = supabase.storage.from('thumbnails').getPublicUrl(path)
       setQrisUrl(urlData.publicUrl); setPreview(urlData.publicUrl)
@@ -118,8 +110,10 @@ function TabQris() {
 
   const saveSettings = async () => {
     setSaving(true)
-    const { error } = await supabase.from('app_settings').upsert({ key: 'qris_image_url', value: qrisUrl })
-    if (error) toast.error('Gagal menyimpan: ' + error.message)
+    const { data, error } = await supabase.functions.invoke('admin-update-settings', {
+      body: { settings: { qris_image_url: qrisUrl } },
+    })
+    if (error || data?.error) toast.error('Gagal menyimpan: ' + (data?.error || error?.message))
     else {
       invalidateSettingsCache(['qris_image_url'])
       toast.success('Pengaturan QRIS disimpan ✅')
@@ -167,6 +161,7 @@ function TabKategori() {
   const [newName, setNewName] = useState('')
   const [adding, setAdding] = useState(false)
   const [deleting, setDeleting] = useState(null)
+  const [editing, setEditing] = useState(null)
 
   const addCategory = async () => {
     if (!newName.trim()) return
@@ -206,6 +201,23 @@ function TabKategori() {
     setDeleting(null)
   }
 
+  const editCategory = async (category) => {
+    const nextName = window.prompt('Nama kategori baru:', category.nama)?.trim()
+    if (!nextName || nextName === category.nama) return
+    if (nextName.length > 100) { toast.error('Nama kategori maksimal 100 karakter'); return }
+    setEditing(category.id)
+    const { error } = await supabase.from('categories').update({ nama: nextName }).eq('id', category.id)
+    if (error) {
+      toast.error(error.message.includes('unique') ? 'Kategori sudah ada' : error.message)
+    } else {
+      const { error: videoError } = await supabase.from('videos').update({ kategori: nextName }).eq('kategori', category.nama)
+      if (videoError) toast.error('Kategori berubah, tetapi beberapa video perlu diperbarui manual')
+      else toast.success('Kategori diperbarui')
+      invalidate()
+    }
+    setEditing(null)
+  }
+
   return (
     <div className="space-y-4 max-w-md">
       <div className="bg-white border border-[#F1D4D6] rounded-2xl p-5">
@@ -235,6 +247,10 @@ function TabKategori() {
               <div key={cat.id} className="px-5 py-3.5 flex items-center gap-3">
                 <GripVertical size={16} className="text-[#F1D4D6] flex-shrink-0" />
                 <span className="flex-1 font-medium text-[#1F2937] text-sm">{cat.nama}</span>
+                <button onClick={() => editCategory(cat)} disabled={editing === cat.id}
+                  className="p-1.5 rounded-lg hover:bg-[#DBEAFE] text-[#6B7280] hover:text-[#2563EB] transition-colors" title="Edit kategori">
+                  {editing === cat.id ? <Loader2 size={14} className="animate-spin" /> : <Edit2 size={14} />}
+                </button>
                 <button onClick={() => deleteCategory(cat.id, cat.nama)} disabled={deleting === cat.id}
                   className="p-1.5 rounded-lg hover:bg-[#FEE2E2] text-[#6B7280] hover:text-[#DC2626] transition-colors">
                   {deleting === cat.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}

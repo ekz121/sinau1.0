@@ -3,6 +3,17 @@
 -- ============================================================
 
 -- ── Kolom baru di videos ─────────────────────────────────────
+-- Policies below depend on this helper; migration 006 later replaces it.
+CREATE OR REPLACE FUNCTION public.get_my_role()
+RETURNS TEXT
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+SET search_path = public
+AS $$
+  SELECT role FROM public.profiles WHERE id = auth.uid();
+$$;
+
 ALTER TABLE public.videos ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT false;
 
 -- ── Kolom baru di profiles ────────────────────────────────────

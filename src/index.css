@@ -7,6 +7,9 @@
   --color-primary: #D62839;
   --color-primary-hover: #B71C2B;
   --color-primary-light: #FDEDEE;
+  --color-secondary: #4F46E5;
+  --color-accent: #06B6D4;
+  --color-ink: #111827;
 
   /* Base */
   --color-base-bg: #FFFFFF;
@@ -44,12 +47,29 @@ html {
 
 body {
   font-family: 'Plus Jakarta Sans', sans-serif;
-  background-color: #FFFFFF;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(79, 70, 229, 0.07), transparent 26rem),
+    radial-gradient(circle at 95% 8%, rgba(214, 40, 57, 0.07), transparent 24rem),
+    #F8FAFC;
   color: #1F2937;
   font-size: 16px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  color: #fff;
+  background: #D62839;
+}
+
+:where(button, a, input, textarea, select):focus-visible {
+  outline: 3px solid rgba(79, 70, 229, 0.28);
+  outline-offset: 2px;
+}
+
+button, a {
+  touch-action: manipulation;
 }
 
 /* ─── Scrollbar ──────────────────────────────────────── */
@@ -89,6 +109,15 @@ body {
 
 .fade-in {
   animation: fade-in 0.3s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* ─── Slide-up Animation ─────────────────────────────── */

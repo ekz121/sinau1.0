@@ -23,6 +23,8 @@ export default function UserManagementPage() {
   const [roleFilter, setRoleFilter] = useState('')
   const [processing, setProcessing] = useState(null) // userId yang sedang diproses
   const [selected, setSelected] = useState(null)
+  const [userHistory, setUserHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   const fetchUsers = async () => {
     setLoading(true)
@@ -42,6 +44,19 @@ export default function UserManagementPage() {
   }
 
   useEffect(() => { fetchUsers() }, [search, roleFilter, page])
+
+  const openUser = async (account) => {
+    setSelected(account)
+    setHistoryLoading(true)
+    const { data } = await supabase
+      .from('transactions')
+      .select('id, type, amount_koin, status, created_at')
+      .eq('user_id', account.id)
+      .order('created_at', { ascending: false })
+      .limit(8)
+    setUserHistory(data ?? [])
+    setHistoryLoading(false)
+  }
 
   const handleAction = async (userId, action, confirmMsg) => {
     if (confirmMsg && !window.confirm(confirmMsg)) return
@@ -112,7 +127,7 @@ export default function UserManagementPage() {
             <div className="divide-y divide-[#F1D4D6]">
               {users.map(u => (
                 <div key={u.id} className="px-5 py-4 flex items-center gap-3 hover:bg-[#FAFAFA] transition-colors cursor-pointer"
-                  onClick={() => setSelected(u)}>
+                  onClick={() => openUser(u)}>
                   <div className="w-9 h-9 bg-gradient-to-br from-[#D62839] to-[#B71C2B] rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
                     {u.avatar_url ? (
                       <img src={u.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
@@ -239,6 +254,22 @@ export default function UserManagementPage() {
                     {new Date(selected.created_at).toLocaleDateString('id-ID')}
                   </span>
                 </div>
+              </div>
+
+              <div className="border-t border-[#F1D4D6] pt-3">
+                <p className="font-semibold text-[#1F2937] text-sm mb-2">Riwayat Transaksi Terbaru</p>
+                {historyLoading ? <div className="skeleton h-16 rounded-xl" /> : userHistory.length === 0 ? (
+                  <p className="text-[#6B7280] text-xs">Belum ada transaksi</p>
+                ) : (
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                    {userHistory.map((transaction) => (
+                      <div key={transaction.id} className="flex items-center justify-between text-xs bg-[#FAFAFA] rounded-lg px-3 py-2">
+                        <span className="text-[#1F2937] capitalize">{transaction.type} · {transaction.status || 'berhasil'}</span>
+                        <span className="font-semibold text-[#6B7280]">{Number(transaction.amount_koin).toLocaleString('id-ID', { maximumFractionDigits: 2 })} koin</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Actions — hanya untuk user yang belum dihapus */}

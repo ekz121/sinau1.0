@@ -55,7 +55,10 @@ export default function AdminLoginPage() {
           <p className="text-white/50 text-sm mt-1">Portal Administrator</p>
         </div>
 
-        <div className="bg-white/10 backdrop-blur rounded-2xl border border-white/10 p-6 space-y-4">
+        <form
+          className="bg-white/10 backdrop-blur rounded-2xl border border-white/10 p-6 space-y-4"
+          onSubmit={handleSubmit}
+        >
           <div>
             <label className="block text-sm font-medium text-white/80 mb-1.5">Email Admin</label>
             <input
@@ -87,13 +90,13 @@ export default function AdminLoginPage() {
           </div>
 
           <button
-            onClick={handleSubmit}
+            type="submit"
             disabled={loading || !email || !password}
             className="w-full flex items-center justify-center gap-2 bg-[#D62839] hover:bg-[#B71C2B] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-colors"
           >
             {loading ? <><Loader2 size={16} className="animate-spin" /> Masuk...</> : 'Masuk ke Portal Admin'}
           </button>
-        </div>
+        </form>
 
         <p className="text-center text-white/30 text-xs mt-6">
           Lupa password? Hubungi pengelola project untuk reset manual.

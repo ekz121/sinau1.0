@@ -21,6 +21,20 @@ export default function useMediaUrl(rawUrl, bucket = 'thumbnails') {
   const [src, setSrc] = useState(null)
   const [triedSigned, setTriedSigned] = useState(false)
 
+  const trySignedUrl = useCallback(async (url, bkt, path) => {
+    try {
+      const cleanPath = path || toBucketPath(url, bkt)
+      const { data } = await supabase.storage.from(bkt).createSignedUrl(cleanPath, 86400)
+      if (data?.signedUrl) {
+        setSrc(data.signedUrl)
+        return true
+      }
+    } catch {
+      // biarkan placeholder tampil
+    }
+    return false
+  }, [])
+
   useEffect(() => {
     setTriedSigned(false)
     if (!rawUrl) {
@@ -49,21 +63,7 @@ export default function useMediaUrl(rawUrl, bucket = 'thumbnails') {
       // Langsung coba signed URL jika public URL tidak bisa didapat
       trySignedUrl(url, bucket, path)
     }
-  }, [rawUrl, bucket])
-
-  const trySignedUrl = async (url, bkt, path) => {
-    try {
-      const cleanPath = path || toBucketPath(url, bkt)
-      const { data } = await supabase.storage.from(bkt).createSignedUrl(cleanPath, 86400)
-      if (data?.signedUrl) {
-        setSrc(data.signedUrl)
-        return true
-      }
-    } catch {
-      // biarkan placeholder tampil
-    }
-    return false
-  }
+  }, [rawUrl, bucket, trySignedUrl])
 
   const handleError = useCallback(async () => {
     if (triedSigned || !rawUrl) return

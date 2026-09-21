@@ -58,7 +58,7 @@ export default function ResetPasswordPage() {
               <p className="text-[#6B7280] text-sm">Memverifikasi link reset...</p>
             </div>
           ) : (
-            <>
+            <form className="space-y-4" onSubmit={handleSubmit}>
               <div>
                 <label className="block text-sm font-medium text-[#1F2937] mb-1.5">Password Baru</label>
                 <div className="relative">
@@ -88,13 +88,13 @@ export default function ResetPasswordPage() {
               </div>
 
               <button
-                onClick={handleSubmit}
+                type="submit"
                 disabled={loading || !password || !confirm}
                 className="w-full flex items-center justify-center gap-2 bg-[#D62839] hover:bg-[#B71C2B] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-colors"
               >
                 {loading ? <><Loader2 size={16} className="animate-spin" /> Menyimpan...</> : <><CheckCircle size={16} /> Simpan Password Baru</>}
               </button>
-            </>
+            </form>
           )}
         </div>
       </div>

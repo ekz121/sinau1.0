@@ -72,7 +72,10 @@ export default function RegisterPage() {
           <p className="text-[#6B7280] text-sm mt-1">Buat akun dan mulai belajar bersama</p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-[#F1D4D6] p-6 space-y-4">
+        <form
+          className="bg-white rounded-2xl shadow-sm border border-[#F1D4D6] p-6 space-y-4"
+          onSubmit={handleSubmit}
+        >
           {/* Nama */}
           <div>
             <label className="block text-sm font-medium text-[#1F2937] mb-1.5">Nama Lengkap</label>
@@ -137,7 +140,7 @@ export default function RegisterPage() {
 
           <button
             id="btn-register"
-            onClick={handleSubmit}
+            type="submit"
             disabled={loading}
             className="w-full flex items-center justify-center gap-2 bg-[#D62839] hover:bg-[#B71C2B] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-colors"
           >
@@ -148,7 +151,7 @@ export default function RegisterPage() {
             Sudah punya akun?{' '}
             <Link to="/login" className="text-[#D62839] font-semibold hover:underline">Masuk</Link>
           </p>
-        </div>
+        </form>
       </div>
     </div>
   )

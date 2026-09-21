@@ -5,7 +5,8 @@ import VideoCard from '../../components/VideoCard'
 import SkeletonCard from '../../components/SkeletonCard'
 import SearchBar from '../../components/SearchBar'
 import CategoryFilter from '../../components/CategoryFilter'
-import { SlidersHorizontal, PlayCircle } from 'lucide-react'
+import { SlidersHorizontal, PlayCircle, Sparkles } from 'lucide-react'
+import { attachPublicProfiles } from '../../lib/publicProfiles'
 
 const SORT_OPTIONS = [
   { value: 'created_at', label: 'Terbaru' },
@@ -27,7 +28,7 @@ export default function ExplorePage() {
     try {
       let query = supabase
         .from('videos')
-        .select('*, profiles(nama, avatar_url)')
+        .select('*')
         .eq('status', 'approved')
         .eq('is_deleted', false)
         .order(sort, { ascending: sort === 'harga_koin' })
@@ -40,7 +41,7 @@ export default function ExplorePage() {
       }
 
       const { data, error } = await query.limit(40)
-      if (!error) setVideos(data ?? [])
+      if (!error) setVideos(await attachPublicProfiles(data))
     } finally {
       setLoading(false)
     }
@@ -56,16 +57,16 @@ export default function ExplorePage() {
     if (!user) return
     supabase
       .from('views')
-      .select('created_at, videos!inner(*, profiles(nama, avatar_url))')
+      .select('created_at, videos!inner(*)')
       .eq('viewer_id', user.id)
       .eq('videos.status', 'approved')
       .eq('videos.is_deleted', false)
       .order('created_at', { ascending: false })
       .limit(4)
-      .then(({ data }) => {
+      .then(async ({ data }) => {
         if (data) {
           const list = data.map(d => d.videos).filter(Boolean)
-          setContinueWatching(list)
+          setContinueWatching(await attachPublicProfiles(list))
         }
       })
   }, [user])
@@ -73,9 +74,16 @@ export default function ExplorePage() {
   return (
     <div className="space-y-5">
       {/* Hero */}
-      <div className="bg-gradient-to-r from-[#D62839] to-[#B71C2B] rounded-2xl p-5 text-white">
-        <h1 className="text-xl font-extrabold mb-1">Jelajahi Video Belajar 🎓</h1>
-        <p className="text-white/80 text-sm">Ribuan video edukatif dari mahasiswa terbaik</p>
+      <div className="relative overflow-hidden bg-gradient-to-br from-[#D62839] via-[#B71C2B] to-[#4F46E5] rounded-[1.75rem] p-6 md:p-8 text-white shadow-xl shadow-[#D62839]/15">
+        <div className="absolute -right-16 -top-20 h-52 w-52 rounded-full border-[28px] border-white/10" />
+        <div className="absolute right-24 -bottom-16 h-32 w-32 rounded-full bg-[#06B6D4]/30 blur-2xl" />
+        <div className="relative max-w-2xl">
+          <span className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] backdrop-blur">
+            <Sparkles size={12} /> Ruang belajar mahasiswa
+          </span>
+          <h1 className="text-2xl md:text-3xl font-extrabold mb-1.5 tracking-tight">Temukan ide baru, satu video sekali tonton.</h1>
+          <p className="text-white/75 text-sm md:text-base">Materi praktis dari mahasiswa, untuk mahasiswa.</p>
+        </div>
       </div>
 
       {/* Lanjutkan Menonton Section */}

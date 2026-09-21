@@ -11,7 +11,7 @@ INSERT INTO public.app_settings (key, value) VALUES ('qris_image_url', '') ON CO
 
 -- ── topup_requests ────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.topup_requests (
-  id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id             UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   jumlah_koin         INTEGER NOT NULL CHECK (jumlah_koin > 0),
   jumlah_rupiah       INTEGER NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS public.topup_requests (
 
 -- ── payout_requests ───────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.payout_requests (
-  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   creator_id    UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   jumlah_koin   INTEGER NOT NULL CHECK (jumlah_koin > 0),
   jumlah_rupiah INTEGER NOT NULL,

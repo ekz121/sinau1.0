@@ -7,10 +7,10 @@ export default function Navbar() {
   const { profile } = useAuthStore()
 
   return (
-    <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-sm border-b border-[#F1D4D6]">
+    <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-white shadow-[0_8px_30px_rgba(31,41,55,0.05)]">
       <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
         <Link to="/" className="flex items-center gap-2 flex-shrink-0">
-          <div className="w-8 h-8 bg-[#D62839] rounded-lg flex items-center justify-center">
+          <div className="w-8 h-8 bg-gradient-to-br from-[#D62839] to-[#4F46E5] rounded-xl flex items-center justify-center shadow-md shadow-[#D62839]/20">
             <BookOpen size={16} className="text-white" />
           </div>
           <span className="font-extrabold text-[#D62839] text-lg tracking-tight">Sinau</span>

@@ -67,41 +67,10 @@ export default function VideoReviewPage() {
   const moderate = async (videoId, action, note = '') => {
     setProcessing(videoId)
     try {
-      // Try Edge Function first
-      let success = false
-      try {
-        const { data, error } = await supabase.functions.invoke('admin-moderate-video', {
-          body: { video_id: videoId, action, rejection_note: note },
-        })
-        if (!error && !data?.error) {
-          success = true
-        }
-      } catch (edgeErr) {
-        console.warn('[VideoReview] Edge function failed, using DB fallback:', edgeErr)
-      }
-
-      // Fallback: direct DB operations
-      if (!success) {
-        const updatePayload = { status: action === 'approve' ? 'approved' : 'rejected' }
-        if (action === 'reject' && note) updatePayload.rejection_note = note.trim()
-
-        const { data: videoData, error: updateErr } = await supabase
-          .from('videos')
-          .update(updatePayload)
-          .eq('id', videoId)
-          .select('creator_id')
-          .single()
-        if (updateErr) throw new Error('Gagal update status video: ' + updateErr.message)
-
-        // Side-effects (non-blocking)
-        const notifType = action === 'approve' ? 'video_approved' : 'video_rejected'
-        const notifPayload = action === 'reject' ? { video_id: videoId, rejection_note: note.trim() } : { video_id: videoId }
-        supabase.from('notifications').insert({
-          user_id: videoData.creator_id,
-          type: notifType,
-          payload_json: notifPayload,
-        }).then(() => {}).catch(() => {})
-      }
+      const { data, error } = await supabase.functions.invoke('admin-moderate-video', {
+        body: { video_id: videoId, action, rejection_note: note },
+      })
+      if (error || data?.error) throw new Error(data?.error || error?.message || 'Gagal moderasi video')
 
       toast.success(action === 'approve' ? 'Video disetujui ✅' : 'Video ditolak')
       closeModal()
@@ -152,20 +121,10 @@ export default function VideoReviewPage() {
 
     for (const vid of selectedIds) {
       try {
-        let ok = false
-        try {
-          const { data, error } = await supabase.functions.invoke('admin-moderate-video', {
-            body: { video_id: vid, action, rejection_note: note?.trim() || null },
-          })
-          if (!error && !data?.error) ok = true
-        } catch { /* edge function unavailable */ }
-
-        if (!ok) {
-          const updatePayload = { status: action === 'approve' ? 'approved' : 'rejected' }
-          if (action === 'reject' && note?.trim()) updatePayload.rejection_note = note.trim()
-          const { error: updateErr } = await supabase.from('videos').update(updatePayload).eq('id', vid)
-          if (updateErr) { failCount++; continue }
-        }
+        const { data, error } = await supabase.functions.invoke('admin-moderate-video', {
+          body: { video_id: vid, action, rejection_note: note?.trim() || null },
+        })
+        if (error || data?.error) { failCount++; continue }
         successCount++
       } catch {
         failCount++

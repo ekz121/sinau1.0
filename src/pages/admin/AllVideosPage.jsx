@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useWalletStore } from '../../stores/walletStore'
 import { useCategoryNames } from '../../hooks/useCategories'
-import { Search, Play, Trash2, Edit2, X, Loader2, CheckCircle, XCircle, Clock, ChevronLeft, ChevronRight, Check } from 'lucide-react'
+import { Search, Play, Trash2, Edit2, X, Loader2, CheckCircle, XCircle, ChevronLeft, ChevronRight, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const PAGE_SIZE = 15
@@ -79,43 +79,48 @@ export default function AllVideosPage() {
       judul: video.judul,
       deskripsi: video.deskripsi || '',
       kategori: video.kategori || '',
-      harga_koin: video.harga_koin,
     })
   }
 
   const closeModal = () => { setSelected(null); setPreviewUrl(null) }
 
   const saveEdit = async () => {
+    if (!editForm.judul?.trim() || !editForm.kategori) {
+      toast.error('Judul dan kategori wajib diisi')
+      return
+    }
     setSaving(true)
-    const { error } = await supabase
-      .from('videos')
-      .update(editForm)
-      .eq('id', selected.id)
-    if (error) {
-      toast.error('Gagal menyimpan: ' + error.message)
-    } else {
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-moderate-video', {
+        body: { video_id: selected.id, action: 'edit', metadata: editForm },
+      })
+      if (error || data?.error) throw new Error(data?.error || error?.message || 'Gagal menyimpan video')
       toast.success('Video diperbarui')
       closeModal()
       fetchVideos()
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   const softDelete = async (videoId) => {
     if (!window.confirm('Hapus video ini? Video tidak akan muncul di platform.')) return
     setDeleting(videoId)
-    const { error } = await supabase
-      .from('videos')
-      .update({ is_deleted: true })
-      .eq('id', videoId)
-    if (error) {
-      toast.error('Gagal menghapus: ' + error.message)
-    } else {
-      toast.success('Video dihapus')
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-moderate-video', {
+        body: { video_id: videoId, action: 'delete' },
+      })
+      if (error || data?.error) throw new Error(data?.error || error?.message || 'Gagal menghapus video')
+      toast.success('Video dan file penyimpanannya dihapus')
       closeModal()
       fetchVideos()
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setDeleting(null)
     }
-    setDeleting(null)
   }
 
   const moderate = async (videoId, action) => {
@@ -123,38 +128,10 @@ export default function AllVideosPage() {
     if (action === 'reject' && !note?.trim()) return
     setSaving(true)
     try {
-      // Try Edge Function first
-      let success = false
-      try {
-        const { data, error } = await supabase.functions.invoke('admin-moderate-video', {
-          body: { video_id: videoId, action, rejection_note: note },
-        })
-        if (!error && !data?.error) success = true
-      } catch (edgeErr) {
-        console.warn('[AllVideos] Edge function failed, using DB fallback:', edgeErr)
-      }
-
-      // Fallback: direct DB operations
-      if (!success) {
-        const updatePayload = { status: action === 'approve' ? 'approved' : 'rejected' }
-        if (action === 'reject' && note?.trim()) updatePayload.rejection_note = note.trim()
-
-        const { data: videoData, error: updateErr } = await supabase
-          .from('videos')
-          .update(updatePayload)
-          .eq('id', videoId)
-          .select('creator_id')
-          .single()
-        if (updateErr) throw new Error('Gagal update status video: ' + updateErr.message)
-
-        // Side-effects
-        const notifType = action === 'approve' ? 'video_approved' : 'video_rejected'
-        supabase.from('notifications').insert({
-          user_id: videoData.creator_id,
-          type: notifType,
-          payload_json: action === 'reject' ? { video_id: videoId, rejection_note: note.trim() } : { video_id: videoId },
-        }).then(() => {}).catch(() => {})
-      }
+      const { data, error } = await supabase.functions.invoke('admin-moderate-video', {
+        body: { video_id: videoId, action, rejection_note: note },
+      })
+      if (error || data?.error) throw new Error(data?.error || error?.message || 'Gagal moderasi video')
 
       toast.success(action === 'approve' ? 'Video disetujui ✅' : 'Video ditolak')
       closeModal()
@@ -374,11 +351,9 @@ export default function AllVideosPage() {
                     {categoryNames.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#1F2937] mb-1.5">Harga Koin</label>
-                  <input type="number" min="0" value={editForm.harga_koin}
-                    onChange={e => setEditForm(f => ({ ...f, harga_koin: parseInt(e.target.value) || 0 }))}
-                    className="w-full px-4 py-2.5 border border-[#F1D4D6] rounded-xl text-sm focus:outline-none focus:border-[#D62839]" />
+                <div className="bg-[#FAFAFA] border border-[#F1D4D6] rounded-xl px-4 py-3">
+                  <p className="text-sm font-medium text-[#1F2937]">Harga tetap: 1 koin</p>
+                  <p className="text-xs text-[#6B7280] mt-0.5">Harga dikunci oleh aturan platform dan tidak dapat diubah per video.</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-[#1F2937] mb-1.5">Deskripsi</label>

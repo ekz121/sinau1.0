@@ -32,12 +32,13 @@ export async function getAuthUser(req: Request) {
 export async function checkNotSuspended(userId: string) {
   const { data, error } = await supabaseAdmin
     .from('profiles')
-    .select('is_suspended, role')
+    .select('is_suspended, is_deleted, role')
     .eq('id', userId)
     .single()
 
   if (error) throw new Error('Failed to fetch profile')
   if (data?.is_suspended) throw new Error('Account suspended')
+  if (data?.is_deleted) throw new Error('Account deleted')
 
   return data
 }

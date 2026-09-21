@@ -39,9 +39,9 @@ export default function AdminDashboardPage() {
 
   const fetchStats = async () => {
     const [usersRes, videosRes, txRes, reportsRes, topupRes, payoutRes] = await Promise.all([
-      supabase.from('profiles').select('id', { count: 'exact' }).eq('role', 'mahasiswa'),
+      supabase.from('profiles').select('id, saldo_koin_topup, saldo_koin_kreator', { count: 'exact' }).eq('is_deleted', false),
       supabase.from('videos').select('id, status', { count: 'exact' }).eq('is_deleted', false),
-      supabase.from('transactions').select('type, amount_koin, created_at'),
+      supabase.from('transactions').select('type, amount_koin, platform_amount_koin, created_at'),
       supabase.from('reports').select('id', { count: 'exact' }).eq('status', 'baru'),
       supabase.from('topup_requests').select('id', { count: 'exact' }).eq('status', 'pending'),
       supabase.from('payout_requests').select('id', { count: 'exact' }).eq('status', 'pending'),
@@ -49,9 +49,13 @@ export default function AdminDashboardPage() {
 
     const videos = videosRes.data ?? []
     const txs = txRes.data ?? []
-    const totalTopupKoin = txs.filter(t => t.type === 'topup').reduce((a, t) => a + t.amount_koin, 0)
-    const totalPurchase = txs.filter(t => t.type === 'purchase').reduce((a, t) => a + t.amount_koin, 0)
-    const totalEarning = txs.filter(t => t.type === 'earning').reduce((a, t) => a + t.amount_koin, 0)
+    const totalTopupKoin = txs.filter(t => t.type === 'topup').reduce((a, t) => a + Number(t.amount_koin), 0)
+    const totalPurchase = txs.filter(t => t.type === 'purchase').reduce((a, t) => a + Number(t.amount_koin), 0)
+    const totalEarning = txs.filter(t => t.type === 'earning').reduce((a, t) => a + Number(t.amount_koin), 0)
+    const platformRevenue = txs.filter(t => t.type === 'purchase').reduce((a, t) => a + Number(t.platform_amount_koin || 0), 0)
+    const coinsCirculated = (usersRes.data ?? []).reduce(
+      (sum, item) => sum + Number(item.saldo_koin_topup || 0) + Number(item.saldo_koin_kreator || 0), 0
+    )
 
     const approvedCount = videos.filter(v => v.status === 'approved').length
     const pendingCount = videos.filter(v => v.status === 'pending').length
@@ -66,7 +70,8 @@ export default function AdminDashboardPage() {
       totalTopupKoin,
       totalPurchase,
       totalEarning,
-      platformRevenue: Math.floor(totalPurchase * platformPct / 100),
+      platformRevenue,
+      coinsCirculated,
       platformPct,
       pendingReports: reportsRes.count ?? 0,
       pendingTopup: topupRes.count ?? 0,
@@ -137,7 +142,7 @@ export default function AdminDashboardPage() {
     stats.pendingVideos + stats.pendingReports + stats.pendingTopup + stats.pendingPayout
 
   const realtimeColor = realtimeStatus === 'connected' ? 'text-[#059669]' : realtimeStatus === 'connecting' ? 'text-[#F59E0B]' : 'text-[#DC2626]'
-  const _realtimeIconComponent = realtimeStatus === 'connected' ? Wifi : WifiOff
+  const RealtimeIcon = realtimeStatus === 'connected' ? Wifi : WifiOff
   const realtimeText = realtimeStatus === 'connected' ? 'Real-time aktif' : realtimeStatus === 'connecting' ? 'Menghubungkan...' : 'Offline'
 
   return (
@@ -152,7 +157,7 @@ export default function AdminDashboardPage() {
           </p>
         </div>
         <div className={`flex items-center gap-1.5 text-xs font-medium ${realtimeColor}`}>
-          <realtimeIconComponent size={12} /> {realtimeText}
+          <RealtimeIcon size={12} /> {realtimeText}
         </div>
       </div>
 
@@ -198,8 +203,8 @@ export default function AdminDashboardPage() {
           )}
 
           {/* Key Stat Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatCard icon={Users} label="Total Mahasiswa" value={stats.totalUsers} color="blue"
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <StatCard icon={Users} label="Total Pengguna" value={stats.totalUsers} color="blue"
               onClick={() => navigate('/admin/users')} />
             <StatCard icon={Film} label="Total Video" value={stats.totalVideos}
               sub={`${stats.approvedVideos} approved · ${stats.pendingVideos} pending`} color="red"
@@ -210,6 +215,9 @@ export default function AdminDashboardPage() {
             <StatCard icon={TrendingUp} label="Revenue Platform" value={`${stats.platformRevenue} koin`}
               sub={`${stats.platformPct}% dari transaksi video`} color="green"
               onClick={() => navigate('/admin/transaksi')} />
+            <StatCard icon={Coins} label="Koin Beredar" value={`${stats.coinsCirculated.toLocaleString('id-ID', { maximumFractionDigits: 2 })} koin`}
+              sub="Saldo top-up + pendapatan" color="blue"
+              onClick={() => navigate('/admin/users')} />
           </div>
 
           {/* Interactive Breakdown Charts */}

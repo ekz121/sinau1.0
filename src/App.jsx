@@ -1,44 +1,51 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { useAuthStore } from './stores/authStore'
-
-// Layouts
-import StudentLayout from './layouts/StudentLayout'
-import AdminLayout from './layouts/AdminLayout'
 
 // Guards
 import ProtectedRoute from './components/ProtectedRoute'
 import AdminRoute from './components/AdminRoute'
 
-// Auth pages
-import LoginPage from './pages/auth/LoginPage'
-import RegisterPage from './pages/auth/RegisterPage'
-import ForgotPasswordPage from './pages/auth/ForgotPasswordPage'
-import ResetPasswordPage from './pages/auth/ResetPasswordPage'
-import EmailVerifiedPage from './pages/auth/EmailVerifiedPage'
-import AdminLoginPage from './pages/auth/AdminLoginPage'
+// Route-level code splitting keeps the login shell and first paint lightweight.
+const StudentLayout = lazy(() => import('./layouts/StudentLayout'))
+const AdminLayout = lazy(() => import('./layouts/AdminLayout'))
+const LoginPage = lazy(() => import('./pages/auth/LoginPage'))
+const RegisterPage = lazy(() => import('./pages/auth/RegisterPage'))
+const ForgotPasswordPage = lazy(() => import('./pages/auth/ForgotPasswordPage'))
+const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage'))
+const EmailVerifiedPage = lazy(() => import('./pages/auth/EmailVerifiedPage'))
+const AdminLoginPage = lazy(() => import('./pages/auth/AdminLoginPage'))
+const ExplorePage = lazy(() => import('./pages/student/ExplorePage'))
+const VideoDetailPage = lazy(() => import('./pages/student/VideoDetailPage'))
+const WalletPage = lazy(() => import('./pages/student/WalletPage'))
+const UploadPage = lazy(() => import('./pages/student/UploadPage'))
+const DashboardPage = lazy(() => import('./pages/student/DashboardPage'))
+const ProfilePage = lazy(() => import('./pages/student/ProfilePage'))
+const HistoryPage = lazy(() => import('./pages/student/HistoryPage'))
+const CreatorProfilePage = lazy(() => import('./pages/student/CreatorProfilePage'))
+const VideoReviewPage = lazy(() => import('./pages/admin/VideoReviewPage'))
+const AllVideosPage = lazy(() => import('./pages/admin/AllVideosPage'))
+const UserManagementPage = lazy(() => import('./pages/admin/UserManagementPage'))
+const TransactionMonitorPage = lazy(() => import('./pages/admin/TransactionMonitorPage'))
+const ReportsPage = lazy(() => import('./pages/admin/ReportsPage'))
+const SettingsPage = lazy(() => import('./pages/admin/settings/SettingsPage'))
+const AdminDashboardPage = lazy(() => import('./pages/admin/AdminDashboardPage'))
 
-// Student pages
-import ExplorePage from './pages/student/ExplorePage'
-import VideoDetailPage from './pages/student/VideoDetailPage'
-import WalletPage from './pages/student/WalletPage'
-import UploadPage from './pages/student/UploadPage'
-import DashboardPage from './pages/student/DashboardPage'
-import ProfilePage from './pages/student/ProfilePage'
-import HistoryPage from './pages/student/HistoryPage'
-
-// Admin pages
-import VideoReviewPage from './pages/admin/VideoReviewPage'
-import AllVideosPage from './pages/admin/AllVideosPage'
-import UserManagementPage from './pages/admin/UserManagementPage'
-import TransactionMonitorPage from './pages/admin/TransactionMonitorPage'
-import ReportsPage from './pages/admin/ReportsPage'
-import SettingsPage from './pages/admin/settings/SettingsPage'
-import AdminDashboardPage from './pages/admin/AdminDashboardPage'
-
-// Student pages (extra)
-import CreatorProfilePage from './pages/student/CreatorProfilePage'
+function RouteFallback() {
+  return (
+    <div className="min-h-screen bg-[#F8FAFC] p-5" aria-label="Memuat halaman">
+      <div className="mx-auto max-w-5xl space-y-4">
+        <div className="skeleton h-16 rounded-2xl" />
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          {Array.from({ length: 8 }, (_, index) => (
+            <div key={index} className="skeleton h-40 rounded-2xl" />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const router = createBrowserRouter([
   // ── Auth Routes ──────────────────────────────────────────
@@ -125,7 +132,9 @@ export default function App() {
 
   return (
     <>
-      <RouterProvider router={router} />
+      <Suspense fallback={<RouteFallback />}>
+        <RouterProvider router={router} />
+      </Suspense>
       <Toaster
         position="top-center"
         toastOptions={{

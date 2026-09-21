@@ -6,11 +6,12 @@ import {
   errorResponse,
   successResponse,
 } from '../_shared/supabaseAdmin.ts'
+import { requireFullVideoAccess } from '../_shared/videoAccess.ts'
 
 // @ts-ignore
 declare const Deno: { env: { get(key: string): string | undefined } }
 
-const GEMINI_MODEL = 'gemini-2.0-flash-exp'
+const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-2.5-flash-lite'
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta'
 
 async function sleep(ms: number) {
@@ -123,6 +124,7 @@ Deno.serve(async (req: Request) => {
 
     const { video_id } = await req.json()
     if (!video_id) return errorResponse('video_id is required')
+    const video = await requireFullVideoAccess(user.id, video_id)
 
     // 2. Cek apakah sudah ada video-level summary (cache)
     const { data: videoLevelSummary } = await supabaseAdmin
@@ -138,27 +140,6 @@ Deno.serve(async (req: Request) => {
         is_fallback: videoLevelSummary.is_fallback,
         cached: true 
       })
-    }
-
-    // 3. Fetch video record — hanya video approved
-    const { data: video, error: vidErr } = await supabaseAdmin
-      .from('videos')
-      .select('video_file_url, deskripsi, judul, kategori, status')
-      .eq('id', video_id)
-      .single()
-
-    if (vidErr || !video) return errorResponse('Video not found', 404)
-
-    // Summary hanya untuk video approved (atau admin yang trigger saat approve)
-    if (!['approved'].includes(video.status)) {
-      const { data: adminCheck } = await supabaseAdmin
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single()
-      if (adminCheck?.role !== 'admin') {
-        return errorResponse('Video belum disetujui', 403)
-      }
     }
 
     const apiKey = Deno.env.get('GEMINI_API_KEY')

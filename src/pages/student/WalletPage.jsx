@@ -15,6 +15,8 @@ const TYPE_LABELS = {
   topup:    { label: 'Top Up', color: 'text-[#059669]', icon: ArrowDownLeft, bg: 'bg-[#D1FAE5]' },
   purchase: { label: 'Bayar Video', color: 'text-[#DC2626]', icon: ArrowUpRight, bg: 'bg-[#FEE2E2]' },
   earning:  { label: 'Pendapatan', color: 'text-[#059669]', icon: ArrowDownLeft, bg: 'bg-[#D1FAE5]' },
+  payout:   { label: 'Pencairan', color: 'text-[#2563EB]', icon: ArrowUpRight, bg: 'bg-[#DBEAFE]' },
+  refund:   { label: 'Pengembalian', color: 'text-[#059669]', icon: ArrowDownLeft, bg: 'bg-[#D1FAE5]' },
 }
 
 const STATUS_MAP = {
@@ -35,64 +37,82 @@ export default function WalletPage() {
   // Bisa dinavigasi langsung ke tab tertentu (misal dari Studio Kreator)
   const [tab, setTab] = useState(location.state?.tab ?? 'topup')
   const [selectedKoin, setSelectedKoin] = useState(null)
+  const [topupKey, setTopupKey] = useState(null)
   const [step, setStep] = useState(1)
   const [submitting, setSubmitting] = useState(false)
   const [buktiFile, setBuktiFile] = useState(null)
   const [topupRequests, setTopupRequests] = useState([])
   const [showQrisZoom, setShowQrisZoom] = useState(false)
   const [payoutRequests, setPayoutRequests] = useState([])
-  const [reqLoading, setReqLoading] = useState(false)
 
   const [payoutForm, setPayoutForm] = useState({ jumlah_koin: '', bank: '', nomor: '', nama_pemilik: '' })
   const [payoutLoading, setPayoutLoading] = useState(false)
+  const [payoutKey, setPayoutKey] = useState(null)
 
   // Baca settings dari DB
-  const { settings, loading: settingsLoading } = useAppSettings(['qris_image_url', 'koin_to_rupiah_rate', 'min_payout_koin'])
+  const { settings } = useAppSettings(['qris_image_url', 'koin_to_rupiah_rate', 'min_payout_koin', 'min_topup_koin', 'max_topup_koin'])
   const qrisUrl = settings.qris_image_url || ''
   const koinRate = parseInt(settings.koin_to_rupiah_rate ?? '500') || 500
   const minPayout = parseInt(settings.min_payout_koin ?? '50') || 50
+  const minTopup = parseInt(settings.min_topup_koin ?? '1') || 1
+  const maxTopup = parseInt(settings.max_topup_koin ?? '10000') || 10000
 
   useEffect(() => {
     fetchTransactions()
     loadRequests()
   }, [tab])
 
-  const loadRequests = async () => {
-    setReqLoading(true)
+  useEffect(() => {
+    if (!profile?.id) return
+    const refreshWallet = async () => {
+      await refreshProfile()
+      await Promise.all([fetchTransactions(), loadRequests()])
+    }
+    const channel = supabase
+      .channel(`wallet-${profile.id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${profile.id}` }, refreshWallet)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'topup_requests', filter: `user_id=eq.${profile.id}` }, refreshWallet)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payout_requests', filter: `creator_id=eq.${profile.id}` }, refreshWallet)
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [profile?.id])
+
+  async function loadRequests() {
+    if (!profile?.id) return
     const [topupRes, payoutRes] = await Promise.all([
       supabase.from('topup_requests').select('*').eq('user_id', profile?.id).order('created_at', { ascending: false }).limit(20),
       supabase.from('payout_requests').select('*').eq('creator_id', profile?.id).order('created_at', { ascending: false }).limit(20),
     ])
     setTopupRequests(topupRes.data ?? [])
     setPayoutRequests(payoutRes.data ?? [])
-    setReqLoading(false)
   }
 
   const submitTopup = async () => {
-    if (!selectedKoin) return
+    if (!Number.isInteger(selectedKoin) || selectedKoin < minTopup || selectedKoin > maxTopup) {
+      toast.error(`Jumlah top up harus ${minTopup}-${maxTopup} koin`)
+      return
+    }
+    if (!buktiFile) { toast.error('Bukti transfer wajib diunggah'); return }
     setSubmitting(true)
     try {
-      let buktiUrl = null
-      if (buktiFile) {
-        const ext = buktiFile.name.split('.').pop()
-        const path = `bukti/${profile?.id}_${Date.now()}.${ext}`
-        const { error: upErr } = await supabase.storage.from('thumbnails').upload(path, buktiFile, { upsert: true })
-        if (!upErr) {
-          const { data: urlData } = supabase.storage.from('thumbnails').getPublicUrl(path)
-          buktiUrl = urlData.publicUrl
-        }
-      }
+      const extension = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[buktiFile.type]
+      const path = `${profile.id}/${crypto.randomUUID()}.${extension}`
+      const { error: upErr } = await supabase.storage
+        .from('payment-proofs')
+        .upload(path, buktiFile, { contentType: buktiFile.type, upsert: false })
+      if (upErr) throw upErr
 
-      // Generate idempotency key dari user+koin+timestamp (mencegah double submit)
-      const idempotencyKey = `${profile?.id}-${selectedKoin}-${Math.floor(Date.now() / 5000)}`
+      const idempotencyKey = topupKey || crypto.randomUUID()
+      setTopupKey(idempotencyKey)
 
       await submitTopupRequest({
         jumlah_koin: selectedKoin,
-        bukti_transfer_url: buktiUrl,
+        bukti_transfer_url: path,
         idempotency_key: idempotencyKey,
       })
 
       setStep(3)
+      setTopupKey(null)
       setBuktiFile(null)
       loadRequests()
     } catch (err) {
@@ -104,7 +124,7 @@ export default function WalletPage() {
 
   const submitPayout = async () => {
     const koin = parseInt(payoutForm.jumlah_koin)
-    const creatorKoin = profile?.saldo_koin_kreator ?? 0
+    const creatorKoin = Number(profile?.saldo_koin_kreator ?? 0)
     if (!koin || koin < minPayout) { toast.error(`Minimum pencairan ${minPayout} koin`); return }
     if (!payoutForm.bank || !payoutForm.nomor || !payoutForm.nama_pemilik) {
       toast.error('Lengkapi data rekening/e-wallet'); return
@@ -115,15 +135,19 @@ export default function WalletPage() {
 
     setPayoutLoading(true)
     try {
+      const idempotencyKey = payoutKey || crypto.randomUUID()
+      setPayoutKey(idempotencyKey)
       const { data, error } = await supabase.functions.invoke('request-payout', {
         body: {
           jumlah_koin: koin,
           data_tujuan: { bank: payoutForm.bank, nomor: payoutForm.nomor, nama_pemilik: payoutForm.nama_pemilik },
+          idempotency_key: idempotencyKey,
         },
       })
       if (error || data?.error) throw new Error(data?.error || error?.message)
       toast.success('Permintaan pencairan terkirim!')
       setPayoutForm({ jumlah_koin: '', bank: '', nomor: '', nama_pemilik: '' })
+      setPayoutKey(null)
       await refreshProfile()
       loadRequests()
     } catch (err) {
@@ -136,7 +160,9 @@ export default function WalletPage() {
   return (
     <div className="space-y-5">
       {/* Balance card */}
-      <div className="bg-gradient-to-br from-[#D62839] to-[#B71C2B] rounded-2xl p-6 text-white space-y-4">
+      <div className="relative overflow-hidden bg-gradient-to-br from-[#111827] via-[#312E81] to-[#D62839] rounded-[1.75rem] p-6 md:p-7 text-white space-y-4 shadow-xl shadow-[#312E81]/15">
+        <div className="absolute -right-12 -top-16 h-52 w-52 rounded-full border-[26px] border-white/10 pointer-events-none" />
+        <div className="absolute right-20 bottom-0 h-24 w-24 rounded-full bg-[#06B6D4]/20 blur-2xl pointer-events-none" />
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
             <Wallet size={20} className="text-white" />
@@ -148,7 +174,7 @@ export default function WalletPage() {
         </div>
         <div className="flex items-end gap-2">
           <Coins size={28} className="text-yellow-300 mb-0.5" />
-          <span className="text-4xl font-extrabold">{profile?.saldo_koin ?? 0}</span>
+          <span className="text-4xl font-extrabold">{Number(profile?.saldo_koin ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 2 })}</span>
           <span className="text-white/70 mb-1">total koin</span>
         </div>
 
@@ -158,14 +184,14 @@ export default function WalletPage() {
             <p className="text-white/80 text-xs font-medium mb-1 flex items-center gap-1">
               <Coins size={12} className="text-amber-300" /> Koin Top Up
             </p>
-            <p className="text-lg font-bold text-white">{profile?.saldo_koin_topup ?? 0}</p>
+            <p className="text-lg font-bold text-white">{Number(profile?.saldo_koin_topup ?? 0).toLocaleString('id-ID')}</p>
             <p className="text-white/60 text-[10px]">Hanya untuk akses video</p>
           </div>
           <div className="bg-blue-600/30 backdrop-blur-sm rounded-xl p-3 border border-blue-300/30">
             <p className="text-blue-100 text-xs font-semibold mb-1 flex items-center gap-1">
               <Coins size={12} className="text-blue-300" /> Koin Biru (Pendapatan)
             </p>
-            <p className="text-lg font-bold text-white">{profile?.saldo_koin_kreator ?? 0}</p>
+            <p className="text-lg font-bold text-white">{Number(profile?.saldo_koin_kreator ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 2 })}</p>
             <p className="text-blue-200/80 text-[10px]">Dapat dicairkan ke uang</p>
           </div>
         </div>
@@ -191,7 +217,7 @@ export default function WalletPage() {
               </h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
                 {TOPUP_OPTIONS.map(opt => (
-                  <button key={opt.koin} onClick={() => setSelectedKoin(opt.koin)}
+                  <button key={opt.koin} onClick={() => { setSelectedKoin(opt.koin); setTopupKey(null) }}
                     className={`border-2 rounded-xl p-3 text-center transition-all ${selectedKoin === opt.koin ? 'border-[#D62839] bg-[#FDEDEE]' : 'border-[#F1D4D6] hover:border-[#D62839]'}`}>
                     <div className="flex items-center justify-center gap-1 mb-0.5">
                       <Coins size={14} className="text-[#F59E0B]" />
@@ -201,7 +227,23 @@ export default function WalletPage() {
                   </button>
                 ))}
               </div>
-              <button onClick={() => selectedKoin && setStep(2)} disabled={!selectedKoin}
+              <div>
+                <label className="block text-sm font-medium text-[#1F2937] mb-1.5">Atau masukkan jumlah koin</label>
+                <input
+                  type="number"
+                  min={minTopup}
+                  max={maxTopup}
+                  step="1"
+                  value={selectedKoin ?? ''}
+                  onChange={(event) => {
+                    setSelectedKoin(event.target.value === '' ? null : Number(event.target.value))
+                    setTopupKey(null)
+                  }}
+                  placeholder={`${minTopup}-${maxTopup} koin`}
+                  className="w-full px-4 py-2.5 border border-[#F1D4D6] rounded-xl text-sm focus:outline-none focus:border-[#D62839]"
+                />
+              </div>
+              <button onClick={() => selectedKoin && setStep(2)} disabled={!selectedKoin || !qrisUrl}
                 className="w-full bg-[#D62839] hover:bg-[#B71C2B] disabled:opacity-40 text-white font-bold py-3 rounded-xl transition-colors">
                 Lanjut ke Pembayaran
               </button>
@@ -236,13 +278,27 @@ export default function WalletPage() {
               </div>
               {/* Upload bukti */}
               <div>
-                <label className="block text-sm font-medium text-[#1F2937] mb-1.5">Upload Bukti Transfer (opsional)</label>
+                <label className="block text-sm font-medium text-[#1F2937] mb-1.5">Upload Bukti Transfer *</label>
                 <label className="flex items-center gap-2 border border-dashed border-[#F1D4D6] hover:border-[#D62839] rounded-xl px-4 py-2.5 cursor-pointer transition-colors">
                   <span className="text-[#D62839] text-sm truncate">{buktiFile ? buktiFile.name : 'Pilih screenshot...'}</span>
-                  <input type="file" accept="image/*" className="hidden" onChange={e => setBuktiFile(e.target.files?.[0] || null)} />
+                  <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={event => {
+                    const proof = event.target.files?.[0]
+                    if (!proof) { setBuktiFile(null); return }
+                    if (!['image/jpeg', 'image/png', 'image/webp'].includes(proof.type)) {
+                      toast.error('Bukti harus JPG, PNG, atau WebP')
+                      event.target.value = ''
+                      return
+                    }
+                    if (proof.size > 5 * 1024 * 1024) {
+                      toast.error('Ukuran bukti maksimal 5MB')
+                      event.target.value = ''
+                      return
+                    }
+                    setBuktiFile(proof)
+                  }} />
                 </label>
               </div>
-              <button onClick={submitTopup} disabled={submitting}
+              <button onClick={submitTopup} disabled={submitting || !buktiFile}
                 className="w-full flex items-center justify-center gap-2 bg-[#059669] hover:bg-[#047857] disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-colors">
                 {submitting ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
                 Sudah Transfer, Kirim Konfirmasi
@@ -257,7 +313,7 @@ export default function WalletPage() {
               </div>
               <h3 className="font-bold text-[#1F2937]">Permintaan Terkirim!</h3>
               <p className="text-[#6B7280] text-sm">Admin akan memverifikasi pembayaran kamu. Saldo akan ditambahkan setelah disetujui.</p>
-              <button onClick={() => { setStep(1); setSelectedKoin(null) }}
+              <button onClick={() => { setStep(1); setSelectedKoin(null); setTopupKey(null) }}
                 className="bg-[#D62839] text-white font-semibold px-6 py-2.5 rounded-xl text-sm hover:bg-[#B71C2B] transition-colors">
                 Top Up Lagi
               </button>
@@ -297,7 +353,7 @@ export default function WalletPage() {
             <Banknote size={18} className="text-[#D62839]" /> Cairkan Koin Biru ke Uang
           </h2>
           <div className="bg-[#EFF6FF] border border-[#BFDBFE] rounded-xl p-3.5 text-xs text-[#1E40AF] leading-relaxed">
-            💡 <span className="font-semibold">Informasi Payout:</span> Hanya <span className="font-bold">Koin Biru (Pendapatan Kreator)</span> yang dapat dicairkan menjadi Rupiah. Saldo Koin Biru kamu: <span className="font-bold text-[#1D4ED8]">{profile?.saldo_koin_kreator ?? 0} koin</span>. Minimum pencairan {minPayout} koin.
+            💡 <span className="font-semibold">Informasi Payout:</span> Hanya <span className="font-bold">Koin Biru (Pendapatan Kreator)</span> yang dapat dicairkan menjadi Rupiah. Saldo Koin Biru kamu: <span className="font-bold text-[#1D4ED8]">{Number(profile?.saldo_koin_kreator ?? 0).toLocaleString('id-ID', { maximumFractionDigits: 2 })} koin</span>. Minimum pencairan {minPayout} koin.
           </div>
 
           <div className="space-y-3">
@@ -388,7 +444,7 @@ export default function WalletPage() {
               {transactions.map(tx => {
                 const meta = TYPE_LABELS[tx.type] || TYPE_LABELS.topup
                 const Icon = meta.icon
-                const isPositive = tx.type === 'topup' || tx.type === 'earning'
+                const isPositive = tx.type === 'topup' || tx.type === 'earning' || tx.type === 'refund'
                 return (
                   <div key={tx.id} className="flex items-center gap-3 p-3 rounded-xl bg-[#FAFAFA]">
                     <div className={`w-9 h-9 ${meta.bg} rounded-xl flex items-center justify-center flex-shrink-0`}>
@@ -396,10 +452,10 @@ export default function WalletPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[#1F2937] text-sm font-medium">{meta.label}</p>
-                      <p className="text-[#6B7280] text-xs">{formatDate(tx.created_at)}</p>
+                      <p className="text-[#6B7280] text-xs">{formatDate(tx.created_at)} · {tx.status === 'pending' ? 'Menunggu' : tx.status === 'gagal' ? 'Gagal' : 'Berhasil'}</p>
                     </div>
                     <span className={`font-bold text-sm ${isPositive ? 'text-[#059669]' : 'text-[#DC2626]'}`}>
-                      {isPositive ? '+' : '-'}{tx.amount_koin} koin
+                      {isPositive ? '+' : '-'}{Number(tx.amount_koin).toLocaleString('id-ID', { maximumFractionDigits: 2 })} koin
                     </span>
                   </div>
                 )

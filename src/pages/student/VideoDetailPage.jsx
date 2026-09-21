@@ -9,6 +9,7 @@ import CoinBadge from '../../components/CoinBadge'
 import CommentSection from '../../components/CommentSection'
 import { Flag, User, Clock, Eye, ChevronLeft, AlertCircle, ThumbsUp, ThumbsDown, UserPlus, UserCheck, X, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { attachPublicProfiles } from '../../lib/publicProfiles'
 
 function formatDuration(s) {
   if (!s) return '-'
@@ -46,10 +47,10 @@ export default function VideoDetailPage() {
     setLoading(true)
     supabase
       .from('videos')
-      .select('*, profiles(id, nama, avatar_url, jurusan)')
+      .select('*')
       .eq('id', id)
       .single()
-      .then(({ data, error: err }) => {
+      .then(async ({ data, error: err }) => {
         if (err || !data) {
           setError('Video tidak ditemukan')
         } else {
@@ -58,7 +59,8 @@ export default function VideoDetailPage() {
           if (data.status !== 'approved' && !isCreator && !isAdmin) {
             setError('Video ini sedang dalam proses review admin')
           } else {
-            setVideo(data)
+            const [hydrated] = await attachPublicProfiles([data])
+            setVideo(hydrated)
             setError('')
             if (profile?.id) {
               supabase.from('views').upsert(
@@ -88,9 +90,9 @@ export default function VideoDetailPage() {
   useEffect(() => {
     if (!video?.kategori) return
     setRelatedLoading(true)
-    supabase.from('videos').select('*, profiles(nama)')
+    supabase.from('videos').select('*')
       .eq('status', 'approved').eq('kategori', video.kategori).neq('id', id).limit(4)
-      .then(({ data }) => { setRelated(data ?? []); setRelatedLoading(false) })
+      .then(async ({ data }) => { setRelated(await attachPublicProfiles(data)); setRelatedLoading(false) })
   }, [video?.kategori, id])
 
   // Fetch likes + follow

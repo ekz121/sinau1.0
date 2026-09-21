@@ -6,7 +6,7 @@ Platform berbagi video kuliah berbasis koin untuk mahasiswa. Kreator upload vide
 
 | Layer | Teknologi |
 |-------|-----------|
-| Frontend | React 18, Vite, React Router v6, Zustand, Tailwind CSS |
+| Frontend | React 19, Vite 8, React Router 7, Zustand 5, Tailwind CSS 4 |
 | Backend | Supabase (PostgreSQL, Auth, Storage, Edge Functions Deno/TS) |
 | Realtime | Supabase Realtime |
 | UI Feedback | react-hot-toast |
@@ -28,6 +28,7 @@ VITE_SUPABASE_ANON_KEY=<anon-key>
 SUPABASE_URL              # Otomatis tersedia di runtime Supabase
 SUPABASE_SERVICE_ROLE_KEY # Otomatis tersedia di runtime Supabase
 GEMINI_API_KEY            # Google AI Studio — untuk fitur generate quiz AI
+GEMINI_MODEL              # Opsional; default gemini-2.5-flash-lite
 ```
 
 ## Setup Supabase Project
@@ -52,16 +53,20 @@ supabase db push
 # supabase/migrations/006_settings_config.sql
 # supabase/migrations/007_v1_1_foundation.sql   ← v1.1 baru
 # supabase/migrations/008_v1_1_hardening.sql    ← v1.1 baru
+# supabase/migrations/009_v1_1_coin_separation_and_storage.sql
+# supabase/migrations/010_storage_buckets_policies.sql
+# supabase/migrations/011_v1_1_full_audit_hardening.sql
 ```
 
 ### 3. Storage Buckets
 
-Buat dua bucket di Supabase Dashboard → Storage:
+Bucket dibuat otomatis oleh migration:
 
 | Bucket | Visibility | Keterangan |
 |--------|------------|------------|
 | `videos` | **Private** | File video — akses hanya via signed URL |
 | `thumbnails` | Public | Thumbnail, avatar, bukti QRIS |
+| `payment-proofs` | **Private** | Bukti transfer top-up |
 
 ### 4. Deploy Edge Functions
 
@@ -73,13 +78,17 @@ supabase functions deploy request-payout
 supabase functions deploy admin-resolve-payout
 supabase functions deploy get-video-url
 supabase functions deploy generate-quiz
+supabase functions deploy generate-summary
 supabase functions deploy admin-moderate-video
-supabase functions deploy admin-manage-user     # baru di v1.1
+supabase functions deploy admin-manage-user
+supabase functions deploy admin-resolve-report
+supabase functions deploy admin-update-settings
+supabase functions deploy topup-coin
 ```
 
 ### 5. Aktifkan Supabase Realtime
 
-Di Dashboard → Database → Replication, aktifkan tabel `notifications` untuk Realtime.
+Migration 011 menambahkan tabel wallet, transaksi, notifikasi, laporan, profil, dan video ke publication Realtime. Periksa hasilnya di Dashboard → Database → Replication setelah migration diterapkan.
 
 ### 6. Konfigurasi Email Auth
 
@@ -117,8 +126,8 @@ npm run build
 - **Semua Video** — filter, pagination, edit, soft delete
 - **Manajemen User** — suspend, promote/demote admin, soft delete + audit log
 - **Monitor Transaksi** — log otomatis, approve/reject top-up & payout
-- **Laporan** — update status laporan user
-- **Pengaturan** — revenue split, rate koin, QRIS, kategori (semua dari DB, tanpa redeploy)
+- **Laporan** — proses laporan video/komentar, hapus komentar, abaikan, atau selesaikan
+- **Pengaturan** — revenue split, minimum payout, QRIS, kategori, dan password admin
 
 ### Keamanan
 - RLS aktif di semua 14 tabel
@@ -134,7 +143,7 @@ Nilai-nilai berikut bisa diubah admin tanpa redeploy:
 | Setting | Default | Keterangan |
 |---------|---------|------------|
 | `revenue_split_creator` | 80 | Persen pendapatan kreator |
-| `koin_to_rupiah_rate` | 500 | 1 koin = Rp 500 |
+| `koin_to_rupiah_rate` | 500 | 1 koin = Rp500 (aturan tetap) |
 | `min_payout_koin` | 50 | Minimum pencairan |
-| `free_preview_seconds` | 180 | Durasi preview gratis (detik) |
+| `free_preview_seconds` | 60 | Durasi preview gratis (aturan tetap) |
 | `qris_image_url` | — | URL gambar QRIS untuk top-up |

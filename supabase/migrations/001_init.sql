@@ -4,7 +4,7 @@
 -- ============================================================
 
 -- ── Extensions ──────────────────────────────────────────────
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
 
 -- ── Tables ──────────────────────────────────────────────────
 
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 );
 
 CREATE TABLE IF NOT EXISTS public.videos (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   creator_id      UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   judul           TEXT NOT NULL,
   deskripsi       TEXT,
@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS public.videos (
 );
 
 CREATE TABLE IF NOT EXISTS public.views (
-  id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   video_id              UUID NOT NULL REFERENCES public.videos(id) ON DELETE CASCADE,
   viewer_id             UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   watch_percentage      NUMERIC DEFAULT 0,
@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS public.views (
 );
 
 CREATE TABLE IF NOT EXISTS public.transactions (
-  id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id          UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   type             TEXT NOT NULL CHECK (type IN ('topup', 'purchase', 'earning')),
   amount_koin      INTEGER NOT NULL CHECK (amount_koin > 0),
@@ -62,7 +62,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_purchase_once
   WHERE type = 'purchase';
 
 CREATE TABLE IF NOT EXISTS public.quiz_results (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   video_id        UUID NOT NULL REFERENCES public.videos(id) ON DELETE CASCADE,
   user_id         UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   ai_summary      TEXT,
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS public.quiz_results (
 );
 
 CREATE TABLE IF NOT EXISTS public.reports (
-  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   video_id    UUID NOT NULL REFERENCES public.videos(id) ON DELETE CASCADE,
   reporter_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   alasan      TEXT NOT NULL,
