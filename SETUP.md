@@ -93,6 +93,8 @@ Jangan hanya menaikkan angka frontend pada paket Free.
 
 Gemini aplikasi konsumen dan Gemini API berbeda. Langganan Pro tidak wajib selama API key Google AI Studio memiliki kuota. Simpan key sebagai secret Edge Functions, bukan variable `VITE_*`:
 
+Mulai September 2026, Google menolak standard API key yang tidak dibatasi. Jika key lama gagal, buka Google AI Studio dan buat/migrasikan ke **Auth Key** atau key yang sudah diberi restriction, lalu simpan nilai barunya sebagai `GEMINI_API_KEY`.
+
 ```powershell
 supabase secrets set GEMINI_API_KEY=API_KEY_ANDA GEMINI_MODEL=gemini-2.5-flash-lite --project-ref xrgkkzfzcokwixtvetfp
 supabase functions deploy generate-quiz --project-ref xrgkkzfzcokwixtvetfp
