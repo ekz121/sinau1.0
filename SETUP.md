@@ -11,10 +11,10 @@ Gunakan **Cloudflare Workers Static Assets** untuk lomba: gratis, HTTPS otomatis
 1. Buka **Cloudflare → Workers & Pages → sinau1-0 → Settings → Build**.
 2. Pastikan repository `ekz121/sinau1.0`, branch `main`, build command `npm run build`, deploy command `npx wrangler deploy`, dan root directory `/`.
 3. Pada **Build variables and secrets**, tambahkan:
-   - `VITE_SUPABASE_URL` = URL project Supabase.
+   - `VITE_SUPABASE_URL` = `https://xrgkkzfzcokwixtvetfp.supabase.co`.
    - `VITE_SUPABASE_ANON_KEY` = publishable/anon key Supabase.
 4. Simpan lalu pilih **Retry build**. Push berikutnya ke `main` akan dideploy otomatis.
-5. Salin URL produksi dari tab **Domains**; bentuknya `https://<nama>.<subdomain-akun>.workers.dev`.
+5. URL produksi aktif: `https://sinau1-0.ekazein495.workers.dev/`.
 
 File `wrangler.toml` mengarahkan folder `dist` sebagai static assets dan memakai fallback SPA. Jangan menambahkan `public/_redirects` pada Cloudflare Workers karena akan menghasilkan infinite redirect.
 
@@ -29,12 +29,14 @@ File `netlify.toml` menangani build dan refresh route React di Netlify.
 
 ## 4. Wajib: URL Supabase Auth
 
-Sesudah memperoleh domain produksi:
+Gunakan domain produksi aktif berikut pada konfigurasi Auth:
 
 1. Buka **Supabase → Authentication → URL Configuration**.
-2. Isi **Site URL** dengan domain produksi.
+2. Isi **Site URL** dengan `https://sinau1-0.ekazein495.workers.dev`.
 3. Tambahkan Redirect URLs:
-   - `https://domain-anda.workers.dev/**`;
+   - `https://sinau1-0.ekazein495.workers.dev/auth/verified`;
+   - `https://sinau1-0.ekazein495.workers.dev/auth/reset-password`;
+   - `https://sinau1-0.ekazein495.workers.dev/**`;
    - domain Netlify bila digunakan;
    - `http://localhost:5173/**` untuk lokal.
 4. Simpan dan tes registrasi, verifikasi email, serta lupa password.

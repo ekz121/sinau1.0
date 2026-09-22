@@ -1,80 +1,137 @@
-# Sinau — Platform Video Edukasi
+# Sinau — Platform Video Edukasi Berbasis Kreator
 
-Sinau adalah aplikasi React + Supabase untuk berbagi video pembelajaran, top-up QRIS dengan verifikasi admin, pendapatan kreator, pencairan, moderasi, notifikasi realtime, serta kuis/ringkasan berbantuan Gemini.
+Sinau adalah platform pembelajaran video untuk mahasiswa. Pengguna dapat menonton materi, membeli akses dengan koin, menjadi kreator, memperoleh Koin Biru dari penonton unik, serta mengajukan pencairan yang diverifikasi admin.
 
-## URL dan akun pemeriksaan juri
+## Akses aplikasi
 
-Source: https://github.com/ekz121/sinau1.0
+| Tujuan | Tautan |
+|---|---|
+| Aplikasi produksi | [Buka Sinau](https://sinau1-0.ekazein495.workers.dev/) |
+| Login mahasiswa/kreator | [Login pengguna](https://sinau1-0.ekazein495.workers.dev/login) |
+| Login administrator | [Login admin](https://sinau1-0.ekazein495.workers.dev/admin/login) |
+| Source code | [GitHub — ekz121/sinau1.0](https://github.com/ekz121/sinau1.0) |
+| Panduan setup | [SETUP.md](./SETUP.md) |
 
-Domain produksi diisi setelah deploy Cloudflare Workers Static Assets atau Netlify. Lihat [SETUP.md](./SETUP.md) untuk langkah lengkap.
+Deployment menggunakan Cloudflare Workers Static Assets. Backend menggunakan Supabase project `xrgkkzfzcokwixtvetfp`.
 
-| Peran | Halaman | Email | Password |
+## Akun penilaian juri
+
+| Peran | Email | Password | Kondisi awal |
 |---|---|---|---|
-| Admin | `/admin/login` | `ekazein495@gmail.com` | `admin123` |
-| Kreator demo | `/login` | `fokus20055@gmail.com` | `baimakifeka` |
+| Admin — Ekazein | `ekazein495@gmail.com` | `admin123` | Akses seluruh portal admin |
+| Kreator demo — Fokus 20055 | `fokus20055@gmail.com` | `baimakifeka` | 500 Koin Biru = Rp250.000 |
 
-Nama admin: **Ekazein**. Akun kreator demo memiliki **500 Koin Biru**, setara **Rp250.000** pada kurs saat ini.
+> Kredensial ini sengaja disediakan untuk penjurian. Password admin harus diganti dan kredensial harus dihapus dari repository setelah lomba.
 
-> Kredensial di atas sengaja dicantumkan untuk pemeriksaan lomba. Segera ganti password admin dan hapus kredensial dari README setelah penjurian.
+## Skenario demo juri — 5 menit
 
-## Aturan koin
+1. Buka [aplikasi produksi](https://sinau1-0.ekazein495.workers.dev/) dan lihat katalog video.
+2. Login sebagai kreator demo, lalu periksa **Dompet**, **Studio Kreator**, video demo, dan saldo 500 Koin Biru.
+3. Buka notifikasi dan gunakan **Tandai semua dibaca**.
+4. Buka video approved untuk melihat player, preview/paywall, komentar, ringkasan, dan kuis.
+5. Logout lalu login melalui [portal admin](https://sinau1-0.ekazein495.workers.dev/admin/login).
+6. Periksa Dashboard, Review Video, Manajemen User, Monitor Transaksi, Laporan, dan Pengaturan.
+7. Untuk menguji payout tanpa transfer uang: ajukan 50 Koin Biru dari akun kreator, kemudian tolak dari admin. Saldo otomatis dikembalikan.
+8. Untuk menyelesaikan payout sungguhan, admin wajib mentransfer dana dan mengunggah bukti transfer.
 
-- Koin Top Up (kuning) dibeli pengguna lewat QRIS dan digunakan untuk membuka akses penuh video.
-- Koin Kreator (biru) didapat dari penonton unik: **1 akun melihat 1 video = 1 Koin Biru**.
-- View berulang dari akun yang sama pada video yang sama tidak memberi koin tambahan.
-- Hanya Koin Biru yang dapat dicairkan.
-- Kurs: **1 Koin Biru = Rp500**.
-- Minimum pencairan: **50 koin = Rp25.000**.
-- Setelah admin mentransfer uang, admin wajib mengunggah bukti transfer. Kreator dapat membuka bukti tersebut dari riwayat pencairan.
+## Fitur berdasarkan peran
 
-## Alur utama
+### Mahasiswa
 
-### Top-up QRIS
+- Registrasi, login, verifikasi email, dan reset password.
+- Eksplorasi dan pencarian video approved.
+- Preview video, pembelian akses, riwayat tontonan, komentar, like/dislike, follow, dan laporan.
+- Top-up melalui QRIS dengan unggah bukti pembayaran.
+- Notifikasi realtime dan **Tandai semua dibaca**.
 
-1. Pengguna membuka **Dompet → Top Up**, memilih paket, memindai QRIS, lalu mengunggah bukti pembayaran.
-2. Permintaan berstatus `pending`; saldo belum berubah.
-3. Admin membuka **Monitor Transaksi**, memeriksa bukti dan mutasi QRIS, lalu menyetujui atau menolak.
-4. Persetujuan hanya dapat diproses sekali dan menambah Koin Top Up secara atomik.
+### Kreator
 
-### Pencairan kreator
+- Upload video MP4 melalui TUS resumable upload.
+- Durasi video tidak dibatasi oleh aplikasi.
+- Studio statistik dan status moderasi.
+- Memperoleh 1 Koin Biru dari setiap akun penonton unik per video.
+- Mengajukan pencairan ke bank/e-wallet.
+- Melihat status, catatan admin, referensi, dan bukti transfer payout.
 
-1. Kreator mengisi bank/e-wallet tujuan dan mengajukan minimal 50 Koin Biru.
-2. Saldo langsung dicadangkan agar tidak dapat diajukan dua kali.
-3. Admin mentransfer dana, mengunggah bukti transfer, lalu menyelesaikan permintaan.
-4. Jika ditolak, Koin Biru otomatis dikembalikan.
-5. Status, catatan admin, nomor referensi, dan bukti transfer terlihat oleh kreator.
+### Administrator
 
-### Video dan hadiah view
+- Dashboard statistik platform.
+- Approve/reject video.
+- Manajemen pengguna, suspend, role, dan audit log.
+- Verifikasi top-up QRIS.
+- Proses payout dengan bukti transfer wajib.
+- Penanganan laporan dan pengaturan aplikasi.
 
-- Video harus disetujui admin sebelum tampil.
-- URL video berasal dari signed URL bucket privat.
-- View dan hadiah dicatat di backend saat video resmi diakses.
-- Satu transaksi hadiah unik mengamankan sistem dari refresh/replay.
-- Durasi video tidak dibatasi.
-- Upload menggunakan TUS resumable dengan retry dan progress.
+## Aturan koin dan pembayaran
 
-## Batas upload video
+| Jenis | Fungsi |
+|---|---|
+| Koin Top Up — kuning | Dibeli melalui QRIS dan dipakai membuka akses video; tidak dapat dicairkan |
+| Koin Kreator — biru | Diperoleh dari view unik dan dapat dicairkan |
+| Hadiah view | 1 akun unik × 1 video = 1 Koin Biru |
+| Kurs | 1 Koin Biru = Rp500 |
+| Minimum payout | 50 koin = Rp25.000 |
+| Saldo akun demo | 500 Koin Biru = Rp250.000 |
 
-Project Supabase Free hanya mengizinkan maksimal **50 MB per file**, sehingga aplikasi memakai batas 50 MB agar upload tidak gagal. Angka 200 MB baru dapat dipakai setelah upgrade Supabase Pro atau memindahkan video ke storage lain. Setelah upgrade, ubah batas bucket `videos` dan konstanta `MAX_SIZE_MB` di `src/components/FileDropzone.jsx` menjadi 200.
+View berulang akun yang sama pada video yang sama tidak memberikan koin tambahan. Pencatatan hadiah dilakukan backend dan dilindungi ledger unik.
 
-Untuk prototipe 20 video berdurasi 30–60 menit, kompres MP4 H.264/AAC (360p, bitrate rendah). Kuota Storage Free adalah 1 GB, jadi target aman sekitar 40–45 MB per video.
+### Alur top-up QRIS
 
-## Stack
+1. Pengguna memilih jumlah koin dan memindai QRIS.
+2. Pengguna mengunggah bukti transfer.
+3. Request berstatus `pending`; saldo belum berubah.
+4. Admin mencocokkan bukti dengan mutasi merchant/bank.
+5. Approve menambah Koin Top Up secara atomik; reject menyimpan alasan.
 
-- React 19, Vite 8, React Router 7, Zustand, Tailwind CSS
-- Supabase PostgreSQL, Auth, Storage, Realtime, Edge Functions
-- Gemini API opsional untuk ringkasan dan kuis; jika key/kuota tidak tersedia, fallback lokal tetap menjaga fitur inti berjalan
+### Alur payout kreator
 
-## Menjalankan lokal
+1. Kreator mengajukan minimal 50 Koin Biru.
+2. Saldo langsung dicadangkan untuk mencegah pengajuan ganda.
+3. Admin memeriksa rekening/e-wallet dan melakukan transfer.
+4. Admin wajib mengunggah bukti sebelum menandai payout selesai.
+5. Kreator dapat membuka bukti melalui signed URL privat.
+6. Jika ditolak, Koin Biru otomatis dikembalikan.
 
-Buat `.env`:
+## Status kesiapan
+
+| Pemeriksaan | Status |
+|---|---|
+| Cloudflare production deployment | Lulus |
+| Root dan route `/admin/login` | HTTP 200 |
+| Supabase production variables | Terpasang |
+| Production build | Lulus |
+| Lint | Tidak ada error; warning advisory tersedia |
+| Migration database | Sinkron `001`–`016` |
+| Edge Functions utama | Aktif |
+| Login admin dan kreator | Terverifikasi |
+| QRIS pengguna | Dapat dimuat |
+| View unik dan hadiah 1 koin | Terverifikasi |
+| Payout proof guard | Terverifikasi |
+| SPA refresh routing | Terverifikasi melalui Wrangler SPA fallback |
+
+## Batas video pada paket gratis
+
+Supabase Free membatasi upload menjadi maksimal 50 MB per file dan menyediakan total storage gratis 1 GB. Karena itu aplikasi memvalidasi 50 MB agar upload tidak gagal di server.
+
+Untuk prototipe 20 video berdurasi 30–60 menit, gunakan MP4 H.264/AAC 360p dengan target sekitar 40–45 MB per video. Batas 200 MB baru dapat digunakan setelah upgrade Supabase Pro atau memindahkan video ke storage lain.
+
+## Teknologi
+
+- React 19, Vite 8, React Router, Zustand, dan Tailwind CSS.
+- Supabase PostgreSQL, Auth, Storage, Realtime, RLS, dan Edge Functions.
+- Cloudflare Workers Static Assets untuk hosting.
+- Gemini API untuk ringkasan dan kuis, dengan fallback ketika key atau kuota tidak tersedia.
+
+## Menjalankan secara lokal
+
+Buat `.env` dari `.env.example`:
 
 ```env
 VITE_SUPABASE_URL=https://xrgkkzfzcokwixtvetfp.supabase.co
 VITE_SUPABASE_ANON_KEY=publishable-key-dari-supabase
 ```
 
-Lalu:
+Kemudian jalankan:
 
 ```powershell
 npm install
@@ -83,35 +140,16 @@ npm run lint
 npm run build
 ```
 
-Jangan pernah menaruh `SUPABASE_SERVICE_ROLE_KEY` atau `GEMINI_API_KEY` di `.env` frontend, source code, atau GitHub.
+Jangan pernah menaruh `SUPABASE_SERVICE_ROLE_KEY` atau `GEMINI_API_KEY` di frontend, source code, atau GitHub.
 
-## Backend
+## Backend dan deployment
 
-Migration `001` sampai `016` sudah diterapkan pada project Supabase yang terhubung. Migration terbaru menambahkan:
+Migration `001`–`016` serta Edge Functions sudah diterapkan pada project Supabase aktif. Cloudflare menggunakan:
 
-- notifikasi **Tandai semua dibaca** melalui RPC aman;
-- 1 Koin Biru untuk setiap view unik;
-- pencegahan kredit view ganda;
-- bukti transfer wajib untuk payout selesai;
-- akses privat bukti payout untuk admin dan pemiliknya.
+- Build command: `npm run build`
+- Deploy command: `npx wrangler deploy`
+- Static assets: `dist`
+- SPA fallback: `wrangler.toml`
+- Production domain: [sinau1-0.ekazein495.workers.dev](https://sinau1-0.ekazein495.workers.dev/)
 
-Jika memakai project Supabase baru:
-
-```powershell
-supabase link --project-ref PROJECT_REF
-supabase db push --linked
-supabase functions deploy purchase-continue
-supabase functions deploy submit-topup-request
-supabase functions deploy admin-approve-topup
-supabase functions deploy request-payout
-supabase functions deploy admin-resolve-payout
-supabase functions deploy get-video-url
-supabase functions deploy generate-quiz
-supabase functions deploy generate-summary
-supabase functions deploy admin-moderate-video
-supabase functions deploy admin-manage-user
-supabase functions deploy admin-resolve-report
-supabase functions deploy admin-update-settings
-```
-
-Panduan deployment, konfigurasi Supabase Auth, Gemini, pemeriksaan transaksi, dan checklist juri ada di [SETUP.md](./SETUP.md).
+Panduan lengkap konfigurasi Cloudflare, Supabase Auth, Gemini, QRIS, payout, dan troubleshooting tersedia di [SETUP.md](./SETUP.md).
