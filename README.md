@@ -6,7 +6,7 @@ Sinau adalah aplikasi React + Supabase untuk berbagi video pembelajaran, top-up 
 
 Source: https://github.com/ekz121/sinau1.0
 
-Domain produksi diisi setelah deploy Cloudflare Pages atau Netlify. Lihat [SETUP.md](./SETUP.md) untuk langkah lengkap.
+Domain produksi diisi setelah deploy Cloudflare Workers Static Assets atau Netlify. Lihat [SETUP.md](./SETUP.md) untuk langkah lengkap.
 
 | Peran | Halaman | Email | Password |
 |---|---|---|---|

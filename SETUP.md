@@ -4,18 +4,19 @@ Status: 21 September 2026. Repository memakai Supabase project `xrgkkzfzcokwixtv
 
 ## 1. Rekomendasi hosting
 
-Gunakan **Cloudflare Pages** untuk lomba: gratis, HTTPS otomatis, domain `*.pages.dev`, dan deploy otomatis dari GitHub. Nama yang disarankan: `sinau-juri-2026`, sehingga alamatnya `https://sinau-juri-2026.pages.dev` jika masih tersedia. Netlify adalah alternatif yang sama-sama cocok. Project ini tidak dideploy ke GitHub Pages.
+Gunakan **Cloudflare Workers Static Assets** untuk lomba: gratis, HTTPS otomatis, domain `*.workers.dev`, dan deploy otomatis dari GitHub. Project Cloudflare yang sudah dibuat bernama `sinau1-0`. Netlify adalah alternatif yang sama-sama cocok. Project ini tidak dideploy ke GitHub Pages.
 
-## 2. Deploy Cloudflare Pages
+## 2. Deploy Cloudflare Workers
 
-1. Buka **Cloudflare → Workers & Pages → Create application → Pages → Connect to Git**.
-2. Pilih repository `ekz121/sinau1.0`.
-3. Atur Production branch `main`, preset `Vite`, command `npm run build`, output `dist`, dan kosongkan Root directory.
-4. Tambahkan untuk Production dan Preview:
+1. Buka **Cloudflare → Workers & Pages → sinau1-0 → Settings → Build**.
+2. Pastikan repository `ekz121/sinau1.0`, branch `main`, build command `npm run build`, deploy command `npx wrangler deploy`, dan root directory `/`.
+3. Pada **Build variables and secrets**, tambahkan:
    - `VITE_SUPABASE_URL` = URL project Supabase.
    - `VITE_SUPABASE_ANON_KEY` = publishable/anon key Supabase.
-5. Klik **Save and Deploy**, lalu salin domain `pages.dev` yang diberikan.
-6. Push berikutnya ke `main` akan dideploy otomatis.
+4. Simpan lalu pilih **Retry build**. Push berikutnya ke `main` akan dideploy otomatis.
+5. Salin URL produksi dari tab **Domains**; bentuknya `https://<nama>.<subdomain-akun>.workers.dev`.
+
+File `wrangler.toml` mengarahkan folder `dist` sebagai static assets dan memakai fallback SPA. Jangan menambahkan `public/_redirects` pada Cloudflare Workers karena akan menghasilkan infinite redirect.
 
 ## 3. Alternatif Netlify
 
@@ -24,7 +25,7 @@ Gunakan **Cloudflare Pages** untuk lomba: gratis, HTTPS otomatis, domain `*.page
 3. Tambahkan dua environment variable `VITE_*` yang sama, lalu deploy.
 4. Ubah nama site bila perlu, misalnya `sinau-juri-2026`.
 
-File `public/_redirects` menangani refresh route React seperti `/admin/login`, `/wallet`, dan `/video/:id` pada kedua platform.
+File `netlify.toml` menangani build dan refresh route React di Netlify.
 
 ## 4. Wajib: URL Supabase Auth
 
@@ -33,7 +34,7 @@ Sesudah memperoleh domain produksi:
 1. Buka **Supabase → Authentication → URL Configuration**.
 2. Isi **Site URL** dengan domain produksi.
 3. Tambahkan Redirect URLs:
-   - `https://domain-anda.pages.dev/**`;
+   - `https://domain-anda.workers.dev/**`;
    - domain Netlify bila digunakan;
    - `http://localhost:5173/**` untuk lokal.
 4. Simpan dan tes registrasi, verifikasi email, serta lupa password.
@@ -144,7 +145,8 @@ Publishable key boleh di frontend karena RLS membatasi akses. Jangan pernah meng
 | Masalah | Solusi |
 |---|---|
 | Halaman kosong | Periksa dua environment variable `VITE_*`, lalu redeploy. |
-| Refresh route 404 | Pastikan `dist/_redirects` ada pada hasil build. |
+| Refresh route 404 di Cloudflare | Pastikan `wrangler.toml` memakai `not_found_handling = "single-page-application"`. |
+| Build sukses tetapi aplikasi tidak terhubung | Tambahkan dua `VITE_*` pada **Settings → Build → Build variables and secrets**, lalu retry build. |
 | Login gagal | Cek kredensial serta status suspended/deleted. |
 | Reset kembali ke URL salah | Perbaiki Site URL dan Redirect URLs Supabase. |
 | Upload >50 MB gagal | Kompres, upgrade Supabase, atau pindah storage. |
